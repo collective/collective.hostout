@@ -59,10 +59,24 @@ from contextlib import closing
 #from ProxyHTTPServer import ProxyHTTPRequestHandler
 from TinyHTTPProxy import ProxyHandler as ProxyHTTPRequestHandler
 import BaseHTTPServer
+from subprocess import CalledProcessError
 
 #logging.basicConfig(level=logging.DEBUG)
 
-
+if "check_output" not in dir( subprocess ): # duck punch it in!
+    def f(*popenargs, **kwargs):
+        if 'stdout' in kwargs:
+            raise ValueError('stdout argument not allowed, it will be overridden.')
+        process = subprocess.Popen(stdout=subprocess.PIPE, *popenargs, **kwargs)
+        output, unused_err = process.communicate()
+        retcode = process.poll()
+        if retcode:
+            cmd = kwargs.get("args")
+            if cmd is None:
+                cmd = popenargs[0]
+            raise CalledProcessError(retcode, cmd)
+        return output
+    subprocess.check_output = f
 
 """
 1. ensure we are on trunk and up to date somehow.
@@ -359,20 +373,11 @@ class HostOut:
         sshconfig = SSHConfig()
         sshconfig.parse(f)
         f.close()
-        host = self.host
-        try:
-            host,port = host.split(':')
-        except:
-            port = None
-        opt = sshconfig.lookup(host)
+        opt = sshconfig.lookup(self.host)
+        if opt:
+            self.host = opt.get('hostname', self.host)
+            self.port = opt.get('port', self.port)
 
-        if port is None:
-            port = opt.get('port')
-
-        host = opt.get('hostname', host)
-        if port:
-            host = "%s:%s" % (host,port)
-        self.host=host
         if not self.identityfile:
             self.identityfile = opt.get('identityfile', None)
             if self.identityfile:
@@ -567,7 +572,8 @@ class Packages:
                 plugin = entrypoint.load()
                 found = set(plugin(path))
                 files = files.union(found)
-                counts[entrypoint.name] = len(found)
+                if len(found) > 0:
+                    counts[entrypoint.name] = len(found)
             if files:
                 hash_debug = "%s" % (counts)
                 hash = _dir_hash(files, recurse=False)
