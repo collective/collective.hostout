@@ -661,7 +661,6 @@ class HostoutTask(WrappedCallableTask):
  #       import pdb; pdb.set_trace()
  #       return arg_roles
     def run(self, *args, **kwargs):
-        import pdb; pdb.set_trace()
         hostout = api.env.hostouts.get(api.env.host_string)
         with hostout.resetenv(self.buildoutuser):
             return self.func(*args, **kwargs)
@@ -759,7 +758,6 @@ def main(cfgfile, args):
                 print >> sys.stderr, ''
     else:
         try:
-            import pdb; pdb.set_trace()
             for host, hostout in hosts:
                 for cmd in cmds:
                     with api.settings(host=host):

@@ -154,6 +154,7 @@ class Recipe:
         config.write(fp)
         fp.close()
         self.update()
+        self.makefabfile()
         
         if self.options.get('mainhostout') is not None:
             self.script = zc.recipe.egg.Scripts(self.buildout, self.options['recipe'], self.options)
@@ -282,6 +283,30 @@ class Recipe:
                 
             f.write(spec)
         f.close()
+
+    def makefabfile(self):
+
+        lines = """
+import collective.hostout.fabfile as hostout
+from collective.hostout.hostout import read_config
+read_config("%s")
+"""
+
+        try:
+            f = open('fabfile.py', "r")
+            curfab = f.read()
+        except:
+            curfab = None
+        if curfab is not None and 'collective.hostout' in curfab:
+            f.close()
+            return
+        else:
+            f = open('fabfile.py', "a")
+            f.write(lines % self.optionsfile)
+            f.close()
+
+
+
         
 
 # relpath.py
@@ -321,4 +346,4 @@ def relpath(target, base=os.curdir):
     rel_list = [os.pardir] * (len(base_list)-i) + target_list[i:]
     return os.path.join(*rel_list)
 
-from hostout import read_config
+#from hostout import read_config
