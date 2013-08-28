@@ -83,11 +83,13 @@ def put(file, target=None):
             for file in files:
                 file = root + '/' + file
                 print file
-                if not target:
-                    target = file
-                if target[0] != '/':
-                    target = api.env.path + '/' + target
-                api.put(file, target)
+                if target:
+                    targetfile = target + '/' + file
+                else:
+                    targetfile = file
+                if targetfile[0] != '/':
+                    targetfile = api.env.path + '/' + targetfile
+                api.put(file, targetfile)
 
 def putrsync(dir):
     """ rsync a local buildout folder with the remote buildout """
@@ -429,6 +431,7 @@ def bootstrap_users():
                         filename='~%s/.ssh/authorized_keys' % owner,
                         use_sudo=use_sudo )
                 run("chown -R %(owner)s ~%(owner)s/.ssh" % locals() )
+                run("chmod go-rwx ~%(owner)s/.ssh ~%(owner)s/.ssh/authorized_keys" % locals() )
 
         except:
             raise Exception ("Was not able to create buildout-user ssh keys, please set buildout-password insted.")
@@ -472,7 +475,7 @@ def bootstrap_buildout():
     buildoutcache = api.env['buildout-cache']
     api.env.hostout.runescalatable ('mkdir -p %s' % os.path.join(buildoutcache, "eggs"))
     api.env.hostout.runescalatable ('mkdir -p %s' % os.path.join(buildoutcache, "download/dist"))
-    api.env.hostout.runescalatable ('mkdir -p %s' % os.path.join(buildoutcache, "extends"))
+    api.env.hostout.runescalatable ('mkdir -p %s' % os.path.join(buildoutcache, "downloads/extends"))
 
     api.env.hostout.requireOwnership (buildoutcache, user=buildout, recursive=True)
 
@@ -518,7 +521,7 @@ def bootstrap_buildout():
 
 def bootstrap_buildout_ubuntu():
     
-    api.sudo('apt-get update')
+#    api.sudo('apt-get update')
     
     api.sudo('apt-get -yq install '
              'build-essential ')
@@ -550,6 +553,8 @@ parts =
       ${buildout:libjpeg-parts}
       ${buildout:python%(majorshort)s-parts}
       ${buildout:links-parts}
+      
+python-buildout-root = ${buildout:directory}/src
 
 # ucs4 is needed as lots of eggs like lxml are also compiled with ucs4 since most linux distros compile with this      
 [python-%(major)s-build:default]
@@ -566,8 +571,6 @@ patch = %(patch_file)s
 [install-links]
 prefix = ${buildout:directory}
 
-[versions]
-zc.buildout = 1.4.3
 
 """
 
@@ -630,14 +633,13 @@ zc.buildout = 1.4.3
       #TODO: bug in fabric. seems like we need to run this command first before cd will work
       hostos = api.env.hostout.detecthostos().lower()
       with cd(prefix):
-        api.run('test -f collective-buildout.python.tar.gz || wget http://github.com/collective/buildout.python/tarball/master -O collective-buildout.python.tar.gz --no-check-certificate')
+        get_url("http://github.com/collective/buildout.python/tarball/master", output="collective-buildout.python.tar.gz")
         api.run('tar --strip-components=1 -zxvf collective-buildout.python.tar.gz')
 
         #api.sudo('svn co http://svn.plone.org/svn/collective/buildout/python/')
         #get_url('http://python-distribute.org/distribute_setup.py',  api.sudo)
         #api.run('%s python distribute_setup.py'% proxy_cmd())
         # -v due to https://github.com/collective/buildout.python/issues/11
-        api.run('%s python bootstrap.py --distribute -v 1.4.3' % proxy_cmd())
 
         if hostos == 'ubuntu' and major=='2.4':
             patch_file = '${buildout:directory}/ubuntussl.patch'
@@ -646,11 +648,21 @@ zc.buildout = 1.4.3
         else:
             patch_file = ''
 
+        api.run('rm buildout.cfg')
         fabric.contrib.files.append('buildout.cfg', BUILDOUT%locals(), use_sudo=False)
-        api.run('%s bin/buildout -N'%proxy_cmd())
+        # Overwrite with latest bootstrap
+        #get_url('http://svn.zope.org/*checkout*/zc.buildout/trunk/bootstrap/bootstrap.py')
+
+        #create a virtualenv to run collective.buildout in
+        get_url('https://raw.github.com/pypa/virtualenv/master/virtualenv.py')
+        api.run("%s python virtualenv.py --distribute buildoutenv"  % proxy_cmd())
+
+        api.run('source buildoutenv/bin/activate')
+        api.run('%s source buildoutenv/bin/activate; python -S bootstrap.py' % proxy_cmd())
+        api.run('%s source buildoutenv/bin/activate; bin/buildout -N'%proxy_cmd())
         #api.env['python'] = "source /var/buildout-python/python/python-%(major)s/bin/activate; python "
         #api.run('%s bin/install-links'%proxy_cmd())
-        api.run("bin/virtualenv-%(major)s ."%dict(major=major))
+        api.run(" source buildoutenv/bin/activate; bin/virtualenv-%(major)s ."%dict(major=major))
         #api.env['python-path'] = "/var/buildout-python/python-%(major)s" %dict(major=major)
         api.env["system-python-use-not"] = True
         #api.run('%s %s/bin/python distribute_setup.py' % (proxy_cmd(), api.env['python-path']) )
@@ -701,9 +713,14 @@ def bootstrap_python_ubuntu():
     version = api.env['python-version']
     major = '.'.join(version.split('.')[:2])
     
-    
-    
-    
+
+    try:
+        api.sudo('apt-get -yq install software-properties-common python-software-properties')
+        api.sudo('add-apt-repository -yq ppa:fkrull/deadsnakes')
+    except:
+        #version of ubunut too early
+        pass
+
     api.sudo('apt-get update')
     
     #Install and Update Dependencies
@@ -722,10 +739,10 @@ def bootstrap_python_ubuntu():
              'libz-dev '
              'libbz2-dev '
              'libxp-dev '
-             'libssl-dev '
+#             'libssl-dev '
              'curl '
-             'openssl '
-             'python-openssl '
+#             'openssl '
+#             'python-openssl '
              )
     try:
         api.sudo('apt-get -yq install libreadline5-dev ')
@@ -734,10 +751,7 @@ def bootstrap_python_ubuntu():
 
     #api.sudo('apt-get -yq build-dep python%(major)s '%dict(major=major))
 
-    try:
-        api.sudo('apt-get -yq install python%(major)s python%(major)s-dev '%locals())
-    except:
-        hostout.bootstrap_python_buildout()
+    api.sudo('apt-get -yq install python%(major)s python%(major)s-dev '%locals())
 
     #api.sudo('apt-get -yq update; apt-get dist-upgrade')
 
@@ -761,14 +775,15 @@ def bootstrap_python_redhat():
     def python_build():
         # Install packages to build
         required = [
-                "libxml2-devel",
+ #               "libxml2-devel",
                 "ncurses-devel",
                 "zlib",
                 "zlib-devel",
                 "readline-devel",
                 "bzip2-devel",
-                "openssl",
-                "openssl-dev" ]
+#                "openssl",
+#                "openssl-dev"
+        ]
         try:
             api.sudo ('yum -y install' + ' '.join(required))
         except:
@@ -802,7 +817,12 @@ def bootstrap_python_redhat():
     # Redhat/centos don't have Python 2.6 or 2.7 in stock yum repos, use
     # EPEL.  Could also use RPMforge repo:
     # http://dag.wieers.com/rpm/FAQ.php#B
-    api.sudo("rpm -Uvh --force http://download.fedora.redhat.com/pub/epel/5/i386/epel-release-5-4.noarch.rpm")
+    #api.sudo("rpm -Uvh --force http://download.fedora.redhat.com/pub/epel/5/i386/epel-release-5-4.noarch.rpm")
+
+    # for centos 6.0
+    api.sudo('rpm -Uvh --force http://rpms.famillecollet.com/enterprise/remi-release-6.rpm http://dl.fedoraproject.org/pub/epel/6/`arch`/epel-release-6-8.noarch.rpm')
+
+
     version = api.env['python-version']
     python_versioned = 'python' + ''.join(version.split('.')[:2])
 
@@ -812,14 +832,13 @@ def bootstrap_python_redhat():
         api.sudo('yum -y install ' +
                  python_versioned + ' ' +
                  python_versioned + '-devel ' +
+                 'python-devel ' +
                  'python-setuptools '
-                 'libxml2-python '
-                 'python-elementtree '
                  'ncurses-devel '
                  'zlib zlib-devel '
                  'readline-devel '
                  'bzip2-devel '
-                 'openssl openssl-dev '
+                 'patch '
                  )
     except:
         # Couldn't install from rpm - failover build
@@ -997,9 +1016,20 @@ def proxy_cmd():
     else:
         return ''
 
-def get_url(curl, cmd=api.run):
+def get_url(curl, cmd=api.run, output=None):
     proxy = api.env.hostout.socks_proxy
-    if proxy:
-        cmd('curl --socks5 %s -O %s' % (proxy, curl) )
+    if False and output:
+        test = "test -f %s ||"%output
     else:
-        cmd('curl -O %s' % curl)
+        test = ""
+
+    if proxy:
+        cmd('%s curl -L --socks5 %s %s %s' % (test, proxy, '-o %s'%output if output else '-O', curl) )
+    else:
+        #cmd('%s curl -L %s %s' % (test, '-o %s'%output if output else '-O', curl))
+        if not output:
+            output = curl.split('/')[-1]
+        cmd("""python -c "import urllib; urllib.urlretrieve('%s', '%s')" """ % (curl,output))
+
+
+#        api.run('test -f collective-buildout.python.tar.gz || wget http://github.com/collective/buildout.python/tarball/master -O collective-buildout.python.tar.gz --no-check-certificate')
