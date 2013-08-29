@@ -8,7 +8,7 @@ from collective.hostout.hostout import buildoutuser, asbuildoutuser
 from fabric.context_managers import cd, path
 from pkg_resources import resource_filename
 import tempfile
-
+from fabric.exceptions import NetworkError
 
 
 def run(*cmd):
@@ -404,6 +404,8 @@ def bootstrap_users():
             api.sudo('egrep ^%(effective)s: /etc/passwd || useradd %(addopt)s %(effective)s || useradd %(addopt_noM)s %(effective)s' % dict(effective=effective, addopt=addopt, addopt_noM=addopt_noM))
             api.sudo('gpasswd -a %(owner)s %(buildoutgroup)s' % dict(owner=owner, buildoutgroup=buildoutgroup))
             api.sudo('gpasswd -a %(effective)s %(buildoutgroup)s' % dict(effective=effective, buildoutgroup=buildoutgroup))
+        except NetworkError:
+            raise
         except:
             raise Exception (("Was not able to create users and groups." +
                     "Please set these group manualy." +
@@ -998,6 +1000,7 @@ exit $REVAL
 
 def uninstall_bootscript (prefname=""):
     """Uninstalls a system bootscript"""
+    hostout = api.env.hostout
     name = "buildout-" + (prefname or hostout.name)	
     path = os.path.join("/etc/init.d", name)
     api.sudo ((";(which update-rc.d && update-rc.d -f '%(name)s' remove) || "
