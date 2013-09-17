@@ -8,7 +8,7 @@ from collective.hostout.hostout import buildoutuser, asbuildoutuser
 from fabric.context_managers import cd, path
 from pkg_resources import resource_filename
 import tempfile
-from fabric.exceptions import NetworkError
+#from fabric.exceptions import NetworkError
 
 
 def run(*cmd):
