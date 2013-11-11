@@ -656,7 +656,7 @@ prefix = ${buildout:directory}
         #get_url('http://svn.zope.org/*checkout*/zc.buildout/trunk/bootstrap/bootstrap.py')
 
         #create a virtualenv to run collective.buildout in
-        get_url('https://raw.github.com/pypa/virtualenv/master/virtualenv.py')
+        get_url('https://raw.github.com/pypa/virtualenv/1.7/virtualenv.py')
         api.run("%s python virtualenv.py --distribute buildoutenv"  % proxy_cmd())
 
         api.run('source buildoutenv/bin/activate')
