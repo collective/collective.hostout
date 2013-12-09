@@ -656,11 +656,14 @@ prefix = ${buildout:directory}
         #get_url('http://svn.zope.org/*checkout*/zc.buildout/trunk/bootstrap/bootstrap.py')
 
         #create a virtualenv to run collective.buildout in
-        get_url('https://raw.github.com/pypa/virtualenv/1.7/virtualenv.py')
+        # upgrade from 1.7 to 1.10.1, pin down a version to get a stable version
+        get_url('https://raw.github.com/pypa/virtualenv/1.10.1/virtualenv.py')
         api.run("%s python virtualenv.py --distribute buildoutenv"  % proxy_cmd())
 
         api.run('source buildoutenv/bin/activate')
-        api.run('%s source buildoutenv/bin/activate; python -S bootstrap.py' % proxy_cmd())
+        # old version is 'python -S bootstrap.py', but it does not work and got error
+        # no module on shutil, so '-S' is removed.
+        api.run('%s source buildoutenv/bin/activate; python bootstrap.py' % proxy_cmd())
         api.run('%s source buildoutenv/bin/activate; bin/buildout -N'%proxy_cmd())
         #api.env['python'] = "source /var/buildout-python/python/python-%(major)s/bin/activate; python "
         #api.run('%s bin/install-links'%proxy_cmd())
