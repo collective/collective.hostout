@@ -588,6 +588,8 @@ class Packages:
             if os.path.isdir(path):
                 lines = self.setup(args=[path,'--name', '--fullname', '--version'])
                 try:
+                    # remove the [refs] from the lines
+                    lines = [line for line in lines if not line.startswith('[') and not line.endswith(']')]
                     name, fullname, version = lines[-3:] #ignore any warnings before
                 except:
                     import pdb; pdb.set_trace()
