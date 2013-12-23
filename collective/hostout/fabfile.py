@@ -490,7 +490,14 @@ def bootstrap_buildout():
     #api.run('chown -R %s:%s %s' % (buildout, buildoutgroup, buildoutcache))
 
     with asbuildoutuser():
+        # There is a reason why hostout have their own bootstrap.py.
+        # If anyone remember why, please note it here.
         bootstrap = resource_filename(__name__, 'bootstrap.py')
+        
+        # NEW: check if the local 'bootstrap.py' exist. If yes, use it.
+        local_bootstrap = os.path.join(api.env['buildout_location'], 'bootstrap.py')
+        if os.path.isfile(local_bootstrap):
+            bootstrap = local_bootstrap
         with cd(path):
             api.put(bootstrap, '%s/bootstrap.py' % path)
 
@@ -510,11 +517,13 @@ def bootstrap_buildout():
             #python = "PATH=\$PATH:\"%s\"; %s" % (pythonpath, python)
             versions = api.env.hostout.getVersions()
             buildout_version = versions.get('zc.buildout','1.4.3')
+            #import pdb; pdb.set_trace()
 
             # Bootstrap baby!
             #try:
             with fabric.context_managers.path(pythonpath,behavior='prepend'):
-                api.run('%s %s bootstrap.py --distribute -v %s' % (proxy_cmd(), python, buildout_version) )
+                # new: --distribute option is depreciated 
+                api.run('%s %s bootstrap.py -v %s' % (proxy_cmd(), python, buildout_version) )
             #except:
             #    python = os.path.join (api.env["python-prefix"], "bin/", python)
             #    api.run('%s %s bootstrap.py --distribute' % (proxy_cmd(), python) )
