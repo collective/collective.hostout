@@ -8,4 +8,5 @@ bin
 develop-eggs
 setup.cfg
 parts
-
+src
+.idea
