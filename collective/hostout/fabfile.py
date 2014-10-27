@@ -514,7 +514,7 @@ def bootstrap_buildout():
             # Bootstrap baby!
             #try:
             with fabric.context_managers.path(pythonpath,behavior='prepend'):
-                api.run('%s %s bootstrap.py --distribute -v %s' % (proxy_cmd(), python, buildout_version) )
+                api.run('%s %s bootstrap.py -v %s' % (proxy_cmd(), python, buildout_version) )
             #except:
             #    python = os.path.join (api.env["python-prefix"], "bin/", python)
             #    api.run('%s %s bootstrap.py --distribute' % (proxy_cmd(), python) )
