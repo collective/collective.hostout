@@ -765,7 +765,7 @@ def main(cfgfile, args):
     if not hosts or not cmds:
         print >> sys.stderr, "cmdline is: bin/hostout host1 [host2...] [all] cmd1 [cmd2...] [arg1 arg2...]"
     if not hosts:
-        print >> sys.stderr, "Valid hosts are: %s"% ' '.join(allhosts.keys())
+        print >> sys.stderr, "Valid hosts are: %s"% ' '.join(sorted(allhosts.keys()))
     elif not cmds:
         print >> sys.stderr, "Valid commands are:"
         max_name_len = reduce(lambda a,b: max(a, len(b)), allcmds.keys(), 0)
