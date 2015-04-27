@@ -287,7 +287,7 @@ class HostOut:
 
 
 
-    def getHostoutPackage(self):
+    def getHostoutPackageFiles(self):
         "determine all the buildout files that make up this configuration and package them"
 
         if self.hostout_package is not None:
@@ -310,7 +310,12 @@ class HostOut:
         filesRelative = [os.path.relpath(f, self.buildout_dir) for f in filesAbsolute]
         filesAbsRel = zip (filesAbsolute, filesRelative)
         self.releaseid = _dir_hash(filesAbsolute)
-        
+        return filesAbsRel
+
+    def getHostoutPackage(self):
+        "determine all the buildout files that make up this configuration and package them"
+        filesAbsRel = self.getHostoutPackageFiles()
+
         
         name = '%s/%s_%s.tgz'%(dist_dir,'deploy', self.releaseid)
         self.hostout_package = name
