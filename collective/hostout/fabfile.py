@@ -10,7 +10,7 @@ from fabric.context_managers import cd
 from pkg_resources import resource_filename
 import tempfile
 import tarfile
-#from fabric.exceptions import NetworkError
+from fabric.exceptions import NetworkError
 
 
 def run(*cmd):
@@ -428,26 +428,31 @@ def bootstrap_users():
         try:
             #Copy authorized keys to buildout user:
             for owner in [api.env['buildout-user']]:
-
-                # if user is the same as the current user then no need to run
-                # as sudo
-                if owner == api.env["user"]:
-                    use_sudo = False
-                    run = api.run
-                else:
-                    use_sudo = True
-                    run = api.sudo
-                
-                run("mkdir -p ~%s/.ssh" % owner)
-                run('touch ~%s/.ssh/authorized_keys' % owner)
-                fabric.contrib.files.append( text=key,
-                        filename='~%s/.ssh/authorized_keys' % owner,
-                        use_sudo=use_sudo )
-                run("chown -R %(owner)s ~%(owner)s/.ssh" % locals() )
-                run("chmod go-rwx ~%(owner)s/.ssh ~%(owner)s/.ssh/authorized_keys" % locals() )
+               copy_key(owner, key)
 
         except:
             raise Exception ("Was not able to create buildout-user ssh keys, please set buildout-password insted.")
+
+
+def copy_key(owner, key):
+
+        # if user is the same as the current user then no need to run
+        # as sudo
+        if owner == api.env["user"]:
+            use_sudo = False
+            run = api.run
+        else:
+            use_sudo = True
+            run = api.sudo
+
+        run("mkdir -p ~%s/.ssh" % owner)
+        run('touch ~%s/.ssh/authorized_keys' % owner)
+        fabric.contrib.files.append( text=key,
+                filename='~%s/.ssh/authorized_keys' % owner,
+                use_sudo=use_sudo )
+        run("chown -R %(owner)s ~%(owner)s/.ssh" % locals() )
+        run("chmod go-rwx ~%(owner)s/.ssh ~%(owner)s/.ssh/authorized_keys" % locals() )
+
 
 
 def bootstrap_buildout():
@@ -510,6 +515,14 @@ def bootstrap_buildout():
 
                 pythonbin = api.env.hostout.getpythonbin()
                 python = "%s/python%s" % (pythonbin, major)
+                if contrib.files.exists("%svirtualenv%s" % (pythonbin, major)):
+                    api.run("%svirtualenv%s --no-setuptools ." % (pythonbin, major))
+                elif contrib.files.exists("%seasy_install%s" % (pythonbin, major)):
+                    # try to activate virtualenv if it exists
+                    api.run("%(pythonpath)s/easy_install-%(major)s virtualenv"%dict(pythonpath=pythonbin,major=major))
+                    api.run("%(pythonpath)s/virtualenv-%(major)s --no-setuptools ."%dict(pythonpath=pythonbin,major=major))
+
+
 
                 # get setuptools first
                 #if not contrib.files.exists("%s/easy_install" % pythonbin):
@@ -517,24 +530,25 @@ def bootstrap_buildout():
                 #    api.run("%s /tmp/ez_setup.py" % python)
 
                 # get virtualenv first
-                if not contrib.files.exists("%s/pip" % pythonbin):
-                    #with cd("/tmp"):
-                    #    get_url("https://github.com/pypa/virtualenv/tarball/develop", output="virtualenv.tar.gz")
-                    #    api.run("tar xvfz virtualenv.tar.gz")
-                    #    setup = api.run("find pypa-virtualenv* -name virtualenv.py ")
-                    api.run("%s/pip install virtualenv")
+                elif not contrib.files.exists("%spip" % pythonbin):
+                    with cd("/tmp"):
+                        get_url("https://github.com/pypa/virtualenv/tarball/develop", output="virtualenv.tar.gz")
+                        api.run("tar xvfz virtualenv.tar.gz")
+                        setup = api.run("find pypa-virtualenv* -name virtualenv.py ")
+                    api.run("%s /tmp/%s %s" % (python, setup, path))
+                    api.run("rm -r /tmp/pypa-virtualenv*")
+                else:
+                    api.run("%spip install virtualenv" % pythonbin)
                     #api.run("%s %s --no-setuptools %s" % (python, setup, path))
-                api.run("%s/virtualenv --no-setuptools ." % (pythonbin))
+                    api.run("%s/virtualenv --no-setuptools ." % (pythonbin))
 
             # now we have bin/python
 
-            # try to activate virtualenv if it exists
-            #api.run("%(pythonpath)s/easy_install-%(major)s virtualenv"%dict(pythonpath=pythonbin,major=major))
-            #api.run("%(pythonpath)s/virtualenv-%(major)s --no-setuptools ."%dict(pythonpath=pythonbin,major=major))
             # Some reason we need to ensure we have latest setup tools for latest bootstrap.py
             #api.run("bin/easy_install -u setuptools")
             #python += "source /var/buildout-python/python/python-%(major)s/bin/activate; python "
 
+        with cd(path):
             api.put(bootstrap, '%s/bootstrap.py' % path)
             # put in simplest buildout to get bootstrap to run
             versions = api.env.hostout.getVersions()
@@ -1147,40 +1161,52 @@ def docker():
     hostout = api.env.hostout
     versions = hostout.getVersions()
     buildout_version = versions.get('zc.buildout','1.4.3')
+    setuptools_version = versions.get('setuptools','6.0.2')
+    path = api.env.path
+    buildout = api.env['buildout-user']
+    buildoutgroup = api.env['buildout-group']
 
     #upload the eggs
     dl = hostout.getDownloadCache()
     buildoutcache = api.env['buildout-cache']
     dockerfile.run_all('mkdir -p %s %s %s' % (os.path.join(buildoutcache, "eggs"),
-                                              os.path.join(buildoutcache, "downloads/dist"),
-                                              os.path.join(buildoutcache, "downloads/extends")))
+                                              os.path.join(dl, "dist"),
+                                              os.path.join(dl, "extends")))
     dockerfile.run_all('chown -R plone.plone %s' % buildoutcache)
 
-    dockerfile.run_all('mkdir -p /opt/collectd')
-    dockerfile.run_all("mkdir -p /opt/collectd/var/tmp")
-    dockerfile.prefix('ENV', 'TMPDIR /opt/collectd/var/tmp')
-    dockerfile.prefix('WORKDIR', '/opt/collectd')
+
+    dockerfile.run_all('mkdir -p %s' % (path))
+    dockerfile.run_all("mkdir -p %s/var/tmp" % path)
+    dockerfile.prefix('ENV', 'TMPDIR %s/var/tmp' % path)
+    dockerfile.prefix('WORKDIR', path)
     bootstrap = resource_filename(__name__, 'bootstrap.py')
 #    dockerfile.add_file(bootstrap, 'bootstrap.py')
     dockerfile.run_all("""python -c "import urllib; urllib.urlretrieve('%s', '%s')" """ %
                        ("https://bootstrap.pypa.io/bootstrap-buildout.py","bootstrap-buildout.py"))
     dockerfile.run_all('chown -R plone.plone . && chmod -R a+rwx .')
-    dockerfile.run_all('virtualenv . && '
-                      'bin/pip install setuptools==6.0.2 && '
+    dockerfile.run_all('cd %(path)s && virtualenv . && '
+                      'bin/pip install setuptools==%(sv)s && '
                        'echo "[buildout]" > buildout.cfg && '
 #                       'echo "[buildout]\n[versions]\nzc.buildout = %s" > buildout.cfg' % buildout_version)
-                       'bin/python bootstrap-buildout.py -v %s -c %s --setuptools-version=6.0.2' % (buildout_version, "buildout.cfg"))
+                       'bin/python bootstrap-buildout.py --buildout-version=%(bv)s -c %(bf)s --setuptools-version=%(sv)s'
+                            % dict(path=path, bv=buildout_version, bf="buildout.cfg", sv=setuptools_version))
     image = client.build_from_file(dockerfile, tag='hostout/buildoutbase', rm=True)
 
     # retry where we left off
     # HACK. What if the buildoutbase changed?
     failedimage = [i['Id'] for i in client.images() if "hostout/%s:latest" % hostout.name in i['RepoTags']]
+    baseimage = image #'hostout/buildoutbase'
     if failedimage:
-        baseimage = failedimage[0]
+        # if image is in the history of our failed image then we can use it
+        for history_image in client.history(failedimage[0]):
+            if history_image['Id'] == image:
+                baseimage = failedimage[0]
+                break
+    if baseimage == image:
+        print "building new image on top of hostout/buildoutbase:%s" % baseimage
     else:
-        baseimage = image #'hostout/buildoutbase'
+        print "uploading updated local buildout into previous failed image of %s" % baseimage
 
-    print "uploading updated local buildout into previous failed image of %s" % baseimage
 
     dockerfile = DockerFile(baseimage, maintainer='ME, me@example.com')
 
@@ -1198,13 +1224,13 @@ def docker():
 
     # move our buildout files over
     for fileabs, filerel in hostout.getHostoutPackageFiles():
-        bundle.add(fileabs, os.path.join('/opt/collectd', filerel), filter=reset )
+        bundle.add(fileabs, os.path.join(path, filerel), filter=reset )
 
     # Now upload pinned.cfg.
     pinned = "[buildout]\ndevelop=\nauto-checkout=\n[versions]\n"+hostout.packages.developVersions()
     pinnedtmp = open('parts/pinned.cfg',"w")
     pinnedtmp.write(pinned)
-    bundle.add(pinnedtmp.name, os.path.join('/opt/collectd', 'pinned.cfg'), filter=reset)
+    bundle.add(pinnedtmp.name, os.path.join(path, 'pinned.cfg'), filter=reset)
     pinnedtmp.close()
 
    #upload generated cfg with hostout versions
@@ -1220,7 +1246,7 @@ def docker():
         hostout_tmp = open('parts/'+buildout_filename, "w")
         hostout_tmp.write(hostout_file)
         hostout_tmp.close()
-    bundle.add('parts/'+buildout_filename, os.path.join('/opt/collectd', buildout_filename), filter=reset)
+    bundle.add('parts/'+buildout_filename, os.path.join(path, buildout_filename), filter=reset)
 
     bundle.close()
     dockerfile.add_file(bundle_file, '/', bundle_file)
@@ -1242,9 +1268,13 @@ def docker():
     #    dockerfile.run_all('if [ `find ".stopdocker" -mmin -1` ]; then rm -f .stopdocker; exit 127; else rm -f .stopdocker; ./bin/buildout -Nc %s || (touch .stopdocker) fi ' % buildout_filename)
 
     # we will use our local downloads folder to speed up builds
-    dockerfile.volumes = ['/opt/collectd/var', os.path.join(buildoutcache, "downloads")]
+    # we shouldn't make the var dir a volume yet because the buildout creates stuff in there
+#    dockerfile.volumes = [
+#        '/opt/collectd/var',
+#        os.path.join(buildoutcache, "downloads")
+#    ]
 
-    dockerfile.expose = "22 80 8101"
+#    dockerfile.expose = "22 80 8101"
 #    dockerfile.command = "bin/supervisord -n"
 #    EXPOSE 8080
 ##    #CMD ["/usr/bin/supervisord"]
@@ -1255,10 +1285,14 @@ def docker():
         return False
 
     # We run our build outside of dockerfile so we can resume the build if it fails
+    volumes = "%s:%s" % (hostout.packages.download_cache, hostout.getDownloadCache())
+    print "mapping local folders: %s" % volumes
+
     container = client.create_container(image,
                                         user='plone',
-                                        command='./bin/buildout -Nc %s' % buildout_filename,
-                                        volumes=["%s:~/Projects/download-cache/downloads"%os.path.join(buildoutcache, "downloads")]
+                                        working_dir=path,
+                                        command='./bin/buildout -Nc %s' % (buildout_filename),
+                                        volumes=[volumes]
                                         )
 
     client.start(container)
@@ -1270,82 +1304,3 @@ def docker():
 
 
 
-
-#
-#[dockerignore]
-#recipe = collective.recipe.template
-#output = ${buildout:directory}/.dockerignore
-#input = inline:
-##  parts
-#  develop-eggs
-#  bin
-#  lib
-#  dist
-#  var
-#  tmp
-#
-#[docker-python27]
-#recipe = collective.recipe.template
-#output = ${buildout:directory}/Dockerfile
-#dep = ${dockerignore:output}
-#input = inline:
-#
-#[docker-python27-build]
-#recipe = collective.recipe.cmd
-#on_install = true
-#on_update = false
-#dep =
-#cmds =
-#    cp cat ${docker-python27:output} Dockerfile
-#    docker build --tag="pretagov/python27"  --rm=true .
-#
-#[docker-collectd]
-#recipe = collective.recipe.template
-#output = ${buildout:parts-directory}/Dockerfile-collectd
-#dep = ${dockerignore:output} ${docker-python27-build:cmds}
-#input = inline:
-#
-#    FROM pretagov/python27
-#
-#    ENV DEBIAN_FRONTEND noninteractive
-#
-#    RUN (apt-get update && apt-get upgrade -y -q && apt-get dist-upgrade -y -q && apt-get -y -q autoclean && apt-get -y -q autoremove)
-#    RUN apt-get install -y -q supervisor python-dev python-imaging python-lxml python-ldap python-cjson libssl-dev libsasl2-dev libldap2-dev libgif-dev libjpeg62-dev libpng12-dev libfreetype6-dev libxml2-dev libxslt1-dev ncurses-dev libedit-dev libltdl-dev
-##    ADD supervisord.conf /etc/supervisor/conf.d/sequestre.conf
-#    RUN adduser --system --disabled-password --shell /bin/bash --group --home /home/plone --gecos "Plone system user" plone
-#    RUN mkdir -p /opt/collectd
-#    ADD . /opt/collectd/
-#    RUN chown -R plone.plone /opt/collectd
-#    RUN chmod -R a+rwx /opt/collectd
-#    RUN ls -al /opt/collectd/src/Products.Ploneboard
-#    RUN su plone -c "cd /opt/collectd && cp buildout.cfg.IN buildout.cfg"
-#    RUN su plone -c "cd /opt/collectd && /opt/BUILDOUT/buildout.python/python-2.7/bin/python bootstrap.py"
-#    RUN su plone -c "cd /opt/collectd && ./bin/buildout -Nc parts/${docker-collectd-buildout:filename}"
-#    EXPOSE 8080
-##    #CMD ["/usr/bin/supervisord"]
-#
-#[docker-collectd-buildout]
-#recipe = collective.recipe.template
-#filename = docker-collectd.cfg
-#output = ${buildout:parts-directory}/${:filename}
-#input = inline:
-#    [buildout]
-#    develop = ${develop-oneline:develop}
-#    parts = collectd supervisor
-#    auto-checkout =
-#    extends = ../project.cfg ../picked.cfg ../hostoutversions.cfg ../production.cfg ../devel.cfg
-#
-#[develop-oneline]
-#recipe = mr.scripty
-#develop = return ' '.join(self.buildout['buildout']['develop'].split('\n'))
-#
-#
-#[docker-collectd-build]
-#recipe = collective.recipe.cmd
-#on_install = true
-#on_update = true
-#cmds =
-#    cp ${docker-collectd:output} Dockerfile
-#    # to get round symlink no being followed
-#    gtar --exclude-vcs-ignores --exclude-vcs --exclude-from=${dockerignore:output} -czh . | docker build --tag="pretagov/collectd"  --rm=true -
-##    gtar --exclude-vcs-ignores --exclude-vcs --exclude-from=${dockerignore:output} -czh . | docker build --tag="pretagov/collectd"  --rm=true -

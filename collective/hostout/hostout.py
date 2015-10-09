@@ -151,7 +151,8 @@ class HostOut:
             
         self.user = opt.get('user')
         self.password = opt.get('password')
-        self.identityfile = opt.get('identity-file')
+
+
         shell =  opt.get('shell')
         if shell is not None:
             api.env.shell = shell
@@ -191,7 +192,13 @@ class HostOut:
         self.options["python-path"] = self.options.get("python-path", path)
         self.options['tunnel'] = self.options.get("tunnel") or False
 
+        self.identityfile = opt.get('identity-file')
+        self.readsshconfig()
+        if not self.identityfile:
+            self.identityfile = os.path.abspath(os.path.join(self.getLocalBuildoutPath(),'hostout_rsa'))
+
         self.firstrun = True
+
 
     def getPreCommands(self):
         return self._subRemote(clean(self.stop_cmd))
@@ -216,9 +223,9 @@ class HostOut:
         return self.parts
 
     def getDownloadCache(self):
-        return "%s/%s" % (self.buildout_cache, 'downloads')
+        return "%s/%s" % (self.buildout_cache.rstrip('/'), 'downloads')
     def getEggCache(self):
-        return "%s/%s" % (self.buildout_cache, 'eggs')
+        return "%s/%s" % (self.buildout_cache.rstrip('/'), 'eggs')
 
     def _subRemote(self, cmds):
         "replace abs localpaths to the buildout with absluote remate buildout paths"
@@ -290,10 +297,6 @@ class HostOut:
     def getHostoutPackageFiles(self):
         "determine all the buildout files that make up this configuration and package them"
 
-        if self.hostout_package is not None:
-            return self.hostout_package
-        dist_dir = self.packages.dist_dir
-        base = self.buildout_dir
         #self.config_file = os.path.join(base,'%s.cfg'%self.name)
         
         #config_file = os.path.abspath(os.path.join(self.packages.buildout_location,self.config_file))
@@ -314,7 +317,13 @@ class HostOut:
 
     def getHostoutPackage(self):
         "determine all the buildout files that make up this configuration and package them"
+        if self.hostout_package is not None:
+            return self.hostout_package
+        dist_dir = self.packages.dist_dir
+        base = self.buildout_dir
+
         filesAbsRel = self.getHostoutPackageFiles()
+        dist_dir = self.packages.dist_dir
 
         
         name = '%s/%s_%s.tgz'%(dist_dir,'deploy', self.releaseid)
@@ -332,8 +341,7 @@ class HostOut:
 
 
     def getIdentityKey(self):
-        keyfile = os.path.abspath(os.path.join(self.getLocalBuildoutPath(),'hostout_rsa'))
-        keyfile = self.options.get('identity-file', keyfile)
+        keyfile = self.identityfile
         if not os.path.exists(keyfile):
             key = RSAKey.generate(1024)
             key.write_private_key_file(keyfile)
@@ -386,6 +394,7 @@ class HostOut:
         if not self.identityfile:
             self.identityfile = opt.get('identityfile', None)
             if self.identityfile:
+                self.identityfile = self.identityfile[0]
                 self.identityfile = os.path.expanduser(self.identityfile).strip()
         if not self.user:
             self.user=opt.get('user','root')
@@ -497,6 +506,7 @@ class Packages:
         self.packages = [p for p in buildout.get('packages','').split()]
 
         self.buildout_location = buildout.get('location','')
+        self.download_cache = buildout.get('download_cache', '')
         self.dist_dir = buildout.get('dist_dir','')
 #        self.versions = dict(config.items('versions'))
         self.tar = None
@@ -597,8 +607,9 @@ class Packages:
                 except:
                     import pdb; pdb.set_trace()
                 hash = hash.lstrip('-').replace('_','-').replace('_','-').replace('--','-')
-                tag = 'dev-'+hash if 'dev' not in version else hash
-                fullname = fullname+tag+'.zip'
+                tag = '.dev'+hash if '.dev' not in version else hash
+                # mimick setuptools which strips the 0.
+                fullname = re.sub(r"(.*).dev0$", r"\1.dev", fullname)+tag+'.zip'
                 if fullname in cur_dists:
                     print "Hostout: '%s' unchanged hash=%s(%s). " % (path, hash, hash_debug)
                     self.local_eggs[name] = (name, version+tag, os.path.join(self.dist_dir,fullname))
@@ -913,7 +924,8 @@ def _dir_hash(paths, recurse=True):
                     #TODO: sometimes .git etc says file is there. Maybe better way to handle this?
                     pass
     import base64
-    hash = base64.urlsafe_b64encode(hash.digest()).strip()
+    #hash = base64.urlsafe_b64encode(hash.digest()).strip()
+    hash = str(int(hash.hexdigest(), 16))
     hash = hash.replace('_','-').replace('=','')
     return hash
 

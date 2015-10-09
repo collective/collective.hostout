@@ -61,8 +61,8 @@ class Recipe:
         self.options.setdefault('buildout','buildout.cfg')
         self.options.setdefault('user','') #get default from .ssh/config
         self.options.setdefault('hostname',name) #get default from .ssh/config
-        idfile = os.path.join(self.buildout_dir,"%s_key"%options.get('hostname'))
-        self.options.setdefault('identity-file',self.options.get('identity_file',idfile))
+        #idfile = os.path.join(self.buildout_dir,"%s_key"%options.get('hostname'))
+        #self.options.setdefault('identity-file',self.options.get('identity_file',idfile))
         self.options.setdefault('buildout-user',self.options['user'])
         self.options.setdefault('effective-user',self.options['buildout-user'])
         self.options.setdefault('buildout-group','buildout')
@@ -187,6 +187,7 @@ class Recipe:
         for name,value in self.options.items():
             config.set(self.name, name, value)
         config.set('buildout','location',self.buildout_dir)
+        config.set('buildout','download_cache',self.download_cache)
 
         if self.options.get('mainhostout') is not None:
             self.writeVersions()
