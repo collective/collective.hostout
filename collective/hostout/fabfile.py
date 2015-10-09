@@ -559,8 +559,8 @@ def bootstrap_buildout():
 
             # Bootstrap baby!
             #try:
-#            with fabric.context_managers.path(pythonpath,behavior='prepend'):
-            api.run('%s bin/python bootstrap.py -v %s' % (proxy_cmd(), buildout_version) )
+            with fabric.context_managers.path(pythonpath,behavior='prepend'):
+                api.run('%s %s bootstrap.py -v %s' % (proxy_cmd(), python, buildout_version) )
             #except:
             #    python = os.path.join (api.env["python-prefix"], "bin/", python)
             #    api.run('%s %s bootstrap.py --distribute' % (proxy_cmd(), python) )
@@ -716,13 +716,14 @@ prefix = ${buildout:directory}
         #get_url('http://svn.zope.org/*checkout*/zc.buildout/trunk/bootstrap/bootstrap.py')
 
         #create a virtualenv to run collective.buildout in
-        get_url('http://pypi.python.org/packages/source/v/virtualenv/virtualenv-1.6.4.tar.gz')
-        api.run("tar xzf virtualenv-1.6.4.tar.gz")
-        api.run("%s python virtualenv-1.6.4/virtualenv.py buildoutenv"  % proxy_cmd())
-        api.run("rm -rf virtualenv-1.6.4")
+        # upgrade from 1.7 to 1.10.1, pin down a version to get a stable version
+        get_url('https://raw.github.com/pypa/virtualenv/1.10.1/virtualenv.py')
+        api.run("%s python virtualenv.py --distribute buildoutenv"  % proxy_cmd())
 
         api.run('source buildoutenv/bin/activate')
-        api.run('%s source buildoutenv/bin/activate; python -S bootstrap.py' % proxy_cmd())
+        # old version is 'python -S bootstrap.py', but it does not work and got error
+        # no module on shutil, so '-S' is removed.
+        api.run('%s source buildoutenv/bin/activate; python bootstrap.py' % proxy_cmd())
         api.run('%s source buildoutenv/bin/activate; bin/buildout -N'%proxy_cmd())
         #api.env['python'] = "source /var/buildout-python/python/python-%(major)s/bin/activate; python "
         #api.run('%s bin/install-links'%proxy_cmd())
