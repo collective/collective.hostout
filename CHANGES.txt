@@ -1,6 +1,12 @@
 Release History
 ***************
 
+1.1 (unreleased)
+----------------
+- New docker command to create a docker image from your localbuildout [Dylan Jay]
+- put_key command to put your public key in the sites authorised_keys file [Dylan Jay]
+- change hash version numbers so now works with latest setuptools and buildout
+
 1.0a6 (unreleased)
 ------------------
 - now compiles python 2.4 on newer ubuntu

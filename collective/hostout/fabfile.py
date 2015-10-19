@@ -10,7 +10,6 @@ from fabric.context_managers import cd
 from pkg_resources import resource_filename
 import tempfile
 import tarfile
-from fabric.exceptions import NetworkError
 
 
 def run(*cmd):
@@ -403,6 +402,9 @@ def bootstrap_users():
     buildoutgroup = api.env['buildout-group']
     owner = buildout
 
+    from fabric.exceptions import NetworkError
+
+
     try:
         api.run ("egrep ^%(owner)s: /etc/passwd && egrep ^%(effective)s: /etc/passwd  && egrep ^%(buildoutgroup)s: /etc/group" % locals())
 
@@ -559,8 +561,8 @@ def bootstrap_buildout():
 
             # Bootstrap baby!
             #try:
-            with fabric.context_managers.path(pythonpath,behavior='prepend'):
-                api.run('%s %s bootstrap.py -v %s' % (proxy_cmd(), python, buildout_version) )
+            #with fabric.context_managers.path(pythonpath,behavior='prepend'):
+            api.run('%s bin/python bootstrap.py -v %s' % (proxy_cmd(), buildout_version) )
             #except:
             #    python = os.path.join (api.env["python-prefix"], "bin/", python)
             #    api.run('%s %s bootstrap.py --distribute' % (proxy_cmd(), python) )
@@ -581,22 +583,23 @@ def getpythonbin():
 
 
 
-def bootstrap_buildout_ubuntu():
-    
-#    api.sudo('apt-get update')
-    
-    api.sudo('apt-get -yq install '
-             'build-essential ')
-    
-    api.sudo('apt-get -yq install '
-             'python-dev ')
-    
-    api.env.hostout.bootstrap_buildout()
+#def bootstrap_buildout_ubuntu():
+#
+##    api.sudo('apt-get update')
+#
+#    api.sudo('apt-get -yq install '
+#             'build-essential ')
+#
+#    api.sudo('apt-get -yq install '
+#             'python-dev ')
+#
+#    api.env.hostout.bootstrap_buildout()
 
 def bootstrap_python_buildout():
     "Install python from source via buildout"
     
     #TODO: need a better way to install from source that doesn't need svn or python
+    # we need libssl-dev, python and other buildtools
     
     path = api.env.path
 
@@ -717,12 +720,33 @@ prefix = ${buildout:directory}
 
         #create a virtualenv to run collective.buildout in
         # upgrade from 1.7 to 1.10.1, pin down a version to get a stable version
-        get_url('https://raw.github.com/pypa/virtualenv/1.10.1/virtualenv.py')
-        api.run("%s python virtualenv.py --distribute buildoutenv"  % proxy_cmd())
+#        get_url('https://raw.github.com/pypa/virtualenv/1.10.1/virtualenv.py')
+#        api.run("%s python virtualenv.py --no-site-packages buildoutenv"  % proxy_cmd())
+
+        with cd("/tmp"):
+            get_url("https://github.com/pypa/virtualenv/tarball/develop", output="virtualenv.tar.gz")
+            api.run("tar xvfz virtualenv.tar.gz")
+            setup = api.run("find pypa-virtualenv* -name virtualenv.py ")
+        api.run("python /tmp/%s  buildoutenv" % ( setup))
+        api.run("rm -r /tmp/pypa-virtualenv*")
+        api.run("%s buildoutenv/bin/pip install setuptools==1.4.2"  % proxy_cmd())
+
 
         api.run('source buildoutenv/bin/activate')
         # old version is 'python -S bootstrap.py', but it does not work and got error
         # no module on shutil, so '-S' is removed.
+
+#    dockerfile.run_all("""python -c "import urllib; urllib.urlretrieve('%s', '%s')" """ %
+#                       ("https://bootstrap.pypa.io/bootstrap-buildout.py","bootstrap-buildout.py"))
+#    dockerfile.run_all('chown -R plone.plone . && chmod -R a+rwx .')
+#    dockerfile.run_all('cd %(path)s && virtualenv . && '
+#                      'bin/pip install setuptools==%(sv)s && '
+#                       'echo "[buildout]" > buildout.cfg && '
+##                       'echo "[buildout]\n[versions]\nzc.buildout = %s" > buildout.cfg' % buildout_version)
+#                       'bin/python bootstrap-buildout.py --buildout-version=%(bv)s -c %(bf)s --setuptools-version=%(sv)s'
+#                            % dict(path=path, bv=buildout_version, bf="buildout.cfg", sv=setuptools_version))
+
+
         api.run('%s source buildoutenv/bin/activate; python bootstrap.py' % proxy_cmd())
         api.run('%s source buildoutenv/bin/activate; bin/buildout -N'%proxy_cmd())
         #api.env['python'] = "source /var/buildout-python/python/python-%(major)s/bin/activate; python "
@@ -1203,7 +1227,7 @@ def docker():
             if history_image['Id'] == image:
                 baseimage = failedimage[0]
                 break
-    if baseimage == image:
+    if baseimage != failedimage:
         print "building new image on top of hostout/buildoutbase:%s" % baseimage
     else:
         print "uploading updated local buildout into previous failed image of %s" % baseimage
@@ -1275,8 +1299,8 @@ def docker():
 #        os.path.join(buildoutcache, "downloads")
 #    ]
 
-#    dockerfile.expose = "22 80 8101"
-#    dockerfile.command = "bin/supervisord -n"
+    dockerfile.expose = "22 80 8101"
+    dockerfile.command = "bin/supervisord -n"
 #    EXPOSE 8080
 ##    #CMD ["/usr/bin/supervisord"]
 #    import pdb; pdb.set_trace()
