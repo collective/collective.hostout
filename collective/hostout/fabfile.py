@@ -1162,7 +1162,8 @@ def docker():
     # http://docker-py.readthedocs.org/en/latest/boot2docker/index.html?highlight=tls
     # kwargs = kwargs_from_env()
     # kwargs['tls'].assert_hostname = False
-    client = myclient(**kwargs_from_env())
+    # see https://github.com/docker/docker-py/issues/731
+    client = myclient(**kwargs_from_env(assert_hostname=False))
     #dockerfile = DockerFile('ubuntu', maintainer='ME, me@example.com')
     ##dockerfile.add_file(...)
     #dockerfile.run_all('(apt-get update && apt-get upgrade -y -q && apt-get dist-upgrade -y -q && apt-get -y -q autoclean && apt-get -y -q autoremove)')
@@ -1215,6 +1216,16 @@ def docker():
 #                       'echo "[buildout]\n[versions]\nzc.buildout = %s" > buildout.cfg' % buildout_version)
                        'bin/python bootstrap-buildout.py --buildout-version=%(bv)s -c %(bf)s --setuptools-version=%(sv)s'
                             % dict(path=path, bv=buildout_version, bf="buildout.cfg", sv=setuptools_version))
+    for cmd in hostout.getPreCommands():
+        dockerfile.run_all(cmd)
+    #HACK
+    #dockerfile.run_all('apt-get install python-docutils')
+    dockerfile.prefix('USER', 'root')
+    dockerfile.run_all('chown -R plone.plone %s . && chmod -R a+rwx .' % buildoutcache)
+
+    dockerfile.expose = "22 80 8101"
+    dockerfile.prefix('USER', 'plone')
+
     image = client.build_from_file(dockerfile, tag='hostout/buildoutbase', rm=True)
 
     # retry where we left off
@@ -1222,10 +1233,11 @@ def docker():
     failedimage = [i['Id'] for i in client.images() if "hostout/%s:latest" % hostout.name in i['RepoTags']]
     baseimage = image #'hostout/buildoutbase'
     if failedimage:
+        failedimage = failedimage[0]
         # if image is in the history of our failed image then we can use it
-        for history_image in client.history(failedimage[0]):
-            if history_image['Id'] == image:
-                baseimage = failedimage[0]
+        for history_image in client.history(failedimage):
+            if history_image['Id'][:len(image)] == image:
+                baseimage = failedimage
                 break
     if baseimage != failedimage:
         print "building new image on top of hostout/buildoutbase:%s" % baseimage
@@ -1245,18 +1257,21 @@ def docker():
     for pkg in hostout.localEggs():
         name = os.path.basename(pkg)
         #dockerfile.add_file(pkg, os.path.join(dl, 'dist', name))
-        bundle.add(pkg, os.path.join(dl, 'dist', name), filter=reset)
+        bundle.add(pkg, os.path.join(path, 'dist', name), filter=reset)
 
     # move our buildout files over
     for fileabs, filerel in hostout.getHostoutPackageFiles():
         bundle.add(fileabs, os.path.join(path, filerel), filter=reset )
 
     # Now upload pinned.cfg.
-    pinned = "[buildout]\ndevelop=\nauto-checkout=\n[versions]\n"+hostout.packages.developVersions()
+    pinned = "[buildout]\ndevelop=\nauto-checkout=\n" + \
+        "find-links += "+ os.path.join(path, 'dist') + '\n' \
+        "[versions]\n"+hostout.packages.developVersions()
     pinnedtmp = open('parts/pinned.cfg',"w")
     pinnedtmp.write(pinned)
-    bundle.add(pinnedtmp.name, os.path.join(path, 'pinned.cfg'), filter=reset)
     pinnedtmp.close()
+    bundle.add(pinnedtmp.name, os.path.join(path, 'pinned.cfg'), filter=reset)
+
 
    #upload generated cfg with hostout versions
     #buildout_filename = "%s-%s.cfg" % (hostout.name, hostout.releaseid)
@@ -1276,34 +1291,8 @@ def docker():
     bundle.close()
     dockerfile.add_file(bundle_file, '/', bundle_file)
 
-    dockerfile.prefix('USER', 'root')
-    dockerfile.run_all('chown -R plone.plone %s . && chmod -R a+rwx .' % buildoutcache)
-
-    for cmd in hostout.getPreCommands():
-        dockerfile.run_all(cmd)
-    #HACK
-    #dockerfile.run_all('apt-get install python-docutils')
-    dockerfile.prefix('USER', 'plone')
-
-
-
-    #dockerfile.run_all('rm -f .stopdocker')
-    #for i in range(1, 20):
-    #    # we want to retain buildout in the cache until it works
-    #    dockerfile.run_all('if [ `find ".stopdocker" -mmin -1` ]; then rm -f .stopdocker; exit 127; else rm -f .stopdocker; ./bin/buildout -Nc %s || (touch .stopdocker) fi ' % buildout_filename)
-
-    # we will use our local downloads folder to speed up builds
-    # we shouldn't make the var dir a volume yet because the buildout creates stuff in there
-#    dockerfile.volumes = [
-#        '/opt/collectd/var',
-#        os.path.join(buildoutcache, "downloads")
-#    ]
-
-    dockerfile.expose = "22 80 8101"
-    dockerfile.command = "bin/supervisord -n"
 #    EXPOSE 8080
 ##    #CMD ["/usr/bin/supervisord"]
-#    import pdb; pdb.set_trace()
     image = client.build_from_file(dockerfile, tag='hostout/%s' % hostout.name, rm=True, stream=True)
 
     if not image:
@@ -1321,11 +1310,36 @@ def docker():
                                         )
 
     client.start(container)
+    error = 0
     for line in client.logs(container, stderr=True, stream=True):
-                print line,
+        print line,
+        if line.startswith('While: '):
+            error = 1
+        if error==1 and line.startswith('Error: '):
+            error = 2
+
     image = client.commit(container.get('Id'), repository="hostout/%s" % hostout.name, tag="latest")
     print "Saving image to %s." % "hostout/%s:latest" % hostout.name
     print "to build fresh: docker rmi %s" % image[u'Id']
+    if error == 2:
+        return
+
+    # if it succeeded finish it off.
+    dockerfile = DockerFile(image[u'Id'], maintainer='ME, me@example.com')
+    dockerfile.prefix('WORKDIR', path)
+#    dockerfile.expose = "22 80 8101"
+    dockerfile.prefix('USER', 'plone')
+    # on run we do one quick offline build so we can include env vars
+    commands = ['cd %s' % path,
+                'chown -R plone.plone var',
+                'chmod -R a+rwx var',
+                './bin/buildout -NOc %s' % buildout_filename,
+    ]
+    commands += hostout.getPostCommands()
+    command = ' && '.join(commands)
+    dockerfile.command=['/bin/bash', '-c', '%s' % (command)]
+    image = client.build_from_file(dockerfile, tag="hostout/%s" % hostout.name, rm=True)
+
 
 
 
