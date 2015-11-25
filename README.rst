@@ -277,6 +277,130 @@ In our example above, deployment would look something like this ::
 Now if you visit ``myhost.com`` you will see your web application shared with
 the world.
 
+
+Hostout docker
+**************
+
+Hostout also integrates with docker to help build custom docker images
+based on a local buildout.
+
+First add your hostout config into your local buildout in order to generate
+your hostout configuration.
+
+```
+[hostout]
+recipe = collective.hostout
+eggs =
+  collective.hostout[docker]
+extends =
+  hostout.supervisor
+versionsfile=hostoutversions.cfg
+include =
+hostos=ubuntu
+
+
+[app]
+<=
+    hostout
+extends =
+buildout =
+    buildout.cfg
+parts =
+    instance1
+post-commands = ./bin/instance1 fg
+
+[db]
+<=
+    hostout
+extends =
+buildout =
+    buildout.cfg
+parts =
+    zeo
+post-commands = ./bin/zeo fg
+```
+
+Now you can rerun buildout and then generate your docker image
+
+```
+$ bin/buildout -c dockerplone_devel.cfg
+$ bin/hostout app db docker
+```
+
+This will use docker apis to generate two images, ```hostout/app``` and
+```hostout/db```. It works similar to buildout in that if you buildout doesn't
+complete then you can rerun the docker hostout command again and it will
+continue where it left off. If you used your own DockerFile you would have
+to ensure your buildout didn't fail as it will roll back the whole buildout
+and you will start a new buildout each time you retry.
+
+The image created will use ```post-commands``` hostout configuration to start
+your process. Before startup it will also rerun your buildout in offline mode.
+This allows your buildout to rewrite itself using environment variables. For
+the following buildout allows a zope instance to be dynamically reconfigred
+to connect to the zeo server using ```gocept.recipe.env```
+
+```
+[env]
+recipe = gocept.recipe.env
+# set defaults
+ZEO_PORT_8100_TCP_ADDR = 0.0.0.0
+ZEO_PORT_8100_TCP_PORT = 8100
+
+[instance1]
+recipe = plone.recipe.zope2instance
+http-address = 0.0.0.0:8080
+user=admin:admin
+zeo-client = on
+zeo-address =  ${env:ZEO_PORT_8100_TCP_ADDR}:${env:ZEO_PORT_8100_TCP_PORT}
+shared-blob = off
+
+[zeo]
+recipe = plone.recipe.zeoserver
+zeo-address = 0.0.0.0:8100
+zeo-var = ${buildout:directory}/var
+blob-storage = ${zeo:zeo-var}/blobstorage
+```
+
+If we use the following docker-compose.yml then the link will set an env variable
+for the exposed port on the zeo server. This will then override the zope2 instance
+during the startup buildout.
+
+```
+app:
+  image: hostout/app
+  ports:
+   - "8080"
+  volumes_from: app_var
+  links:
+   - db:zeo
+
+db:
+  image: hostout/db
+  expose:
+   - "8100"
+  volumes_from: db_var
+
+
+app_var:
+  image: hostout/app # saves space and gets permissions right
+  command: /bin/true # don't want hostout command to run
+  volumes:
+   - /var/buildout/app/var
+
+db_var:
+  image: hostout/db # saves space and gets permissions right
+  command: /bin/true # don't want zeo to run
+  volumes:
+   - /var/buildout/db/var
+```
+
+
+
+
+
+
+
 Other built-in Commands
 ***********************
 

@@ -1,0 +1,34 @@
+
+app:
+#  build: .
+  image: hostout/app
+  ports:
+   - "8080"
+  volumes_from: app_var
+  links:
+   - redis
+   - db:zeo
+
+app_var:
+  image: hostout/app # saves space and gets permissions right
+  command: /bin/true # don't want hostout command to run
+  volumes:
+   - /var/buildout/app/var
+
+
+db:
+  image: hostout/db
+  expose:
+   - "8100"
+  volumes_from:
+   - db_var
+
+db_var:
+  image: hostout/db # saves space and gets permissions right
+  command: /bin/true # don't want zeo to run
+  volumes:
+   - /var/buildout/db/var
+
+
+redis:
+  image: redis
