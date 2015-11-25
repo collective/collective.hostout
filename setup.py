@@ -60,8 +60,8 @@ setup(
     extras_require={
           'docker': [
               'requests>=2.5.2',
-              'docker-py==1.1.0',
-              'docker-map==0.3.0',
+              'docker-py>=1.5.0',
+              'docker-map>=0.6.2', #>=0.3.0',
               ],
           },
 
