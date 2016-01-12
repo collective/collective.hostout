@@ -86,6 +86,9 @@ class Recipe:
         version = '.'.join([str(i) for i in sys.version_info])
         self.options['python-version'] = options.get('python-version', version)
 
+        # used in docker and hostout.cloud
+        self.options.setdefault('hostimage', 'ubuntu')
+
 
     def extends(self, options, seen):
 

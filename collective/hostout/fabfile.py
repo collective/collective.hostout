@@ -1175,13 +1175,26 @@ def docker():
     #dockerfile.run_all("(cd /opt/BUILDOUT/buildout.python )")
     #client.build_from_file(dockerfile, tag="pretagov/python27", rm=True)
 
-    dockerfile = DockerFile('ubuntu', maintainer='ME, me@example.com')
+
+    hostimage = api.env.get('hostimage', 'ubuntu')
+
+    dockerfile = DockerFile(hostimage, maintainer='ME, me@example.com')
+    # TODO: need a way to install python on any platform
+    # TODO: Need a way to get rid of buildtools after running buildout
     dockerfile.run_all("(apt-get update && apt-get upgrade -y -q && apt-get dist-upgrade -y -q && apt-get -y -q autoclean && apt-get -y -q autoremove)")
-    dockerfile.run_all("apt-get install -y -q supervisor python-dev python-pip python-imaging python-lxml python-ldap python-cjson libssl-dev libsasl2-dev libldap2-dev libgif-dev libjpeg62-dev libpng12-dev libfreetype6-dev libxml2-dev libxslt1-dev ncurses-dev libedit-dev libltdl-dev")
-    dockerfile.run_all("apt-get install -y -q  groff groff-base")
-    dockerfile.run_all("pip install virtualenvwrapper")
-##    ADD supervisord.conf /etc/supervisor/conf.d/sequestre.conf
-    dockerfile.run_all('adduser --system --disabled-password --shell /bin/bash --group --home /home/plone --gecos "Plone system user" plone')
+    dockerfile.run_all("apt-get install -y -q --fix-missing "
+                       "python-dev python-pip "
+                       "python-imaging python-lxml python-cjson "
+                       "libssl-dev "
+                       #"libsasl2-dev "
+                       #"libldap2-dev python-ldap  "
+#                       "libgif-dev libjpeg62-dev libpng12-dev libfreetype6-dev "
+                       "libxml2-dev "
+                       "libxslt1-dev ncurses-dev libedit-dev libltdl-dev "
+                       "groff groff-base && "
+                       "pip install virtualenvwrapper && "
+                       'adduser --system --disabled-password --shell /bin/bash '
+                       '--group --home /home/plone --gecos "Plone system user" plone')
 
 
     hostout = api.env.hostout
@@ -1195,27 +1208,30 @@ def docker():
     #upload the eggs
     dl = hostout.getDownloadCache()
     buildoutcache = api.env['buildout-cache']
-    dockerfile.run_all('mkdir -p %s %s %s' % (os.path.join(buildoutcache, "eggs"),
+    cmds = []
+    cmds += ['mkdir -p %s %s %s' % (os.path.join(buildoutcache, "eggs"),
                                               os.path.join(dl, "dist"),
-                                              os.path.join(dl, "extends")))
-    dockerfile.run_all('chown -R plone.plone %s' % buildoutcache)
+                                              os.path.join(dl, "extends"))]
+    cmds += ['chown -R plone.plone %s' % buildoutcache]
+    cmds += ['mkdir -p %s' % (path)]
+    cmds += ["mkdir -p %s/var/tmp" % path]
+    dockerfile.run_all(' && '.join(cmds))
 
-
-    dockerfile.run_all('mkdir -p %s' % (path))
-    dockerfile.run_all("mkdir -p %s/var/tmp" % path)
     dockerfile.prefix('ENV', 'TMPDIR %s/var/tmp' % path)
     dockerfile.prefix('WORKDIR', path)
     bootstrap = resource_filename(__name__, 'bootstrap.py')
 #    dockerfile.add_file(bootstrap, 'bootstrap.py')
-    dockerfile.run_all("""python -c "import urllib; urllib.urlretrieve('%s', '%s')" """ %
-                       ("https://bootstrap.pypa.io/bootstrap-buildout.py","bootstrap-buildout.py"))
-    dockerfile.run_all('chown -R plone.plone . && chmod -R a+rwx .')
-    dockerfile.run_all('cd %(path)s && virtualenv . && '
+    cmds = ["""python -c "import urllib; urllib.urlretrieve('%s', '%s')" """ %
+                       ("https://bootstrap.pypa.io/bootstrap-buildout.py","bootstrap-buildout.py")]
+    cmds += ['chown -R plone.plone . && chmod -R a+rwx .']
+    cmds += ['cd %(path)s && virtualenv . && '
                       'bin/pip install setuptools==%(sv)s && '
                        'echo "[buildout]" > buildout.cfg && '
 #                       'echo "[buildout]\n[versions]\nzc.buildout = %s" > buildout.cfg' % buildout_version)
                        'bin/python bootstrap-buildout.py --buildout-version=%(bv)s -c %(bf)s --setuptools-version=%(sv)s'
-                            % dict(path=path, bv=buildout_version, bf="buildout.cfg", sv=setuptools_version))
+                            % dict(path=path, bv=buildout_version, bf="buildout.cfg", sv=setuptools_version)]
+    dockerfile.run_all(' && '.join(cmds))
+
     for cmd in hostout.getPreCommands():
         dockerfile.run_all(cmd)
     #HACK
@@ -1223,10 +1239,11 @@ def docker():
     dockerfile.prefix('USER', 'root')
     dockerfile.run_all('chown -R plone.plone %s . && chmod -R a+rwx .' % buildoutcache)
 
-    dockerfile.expose = "22 80 8101"
+#    dockerfile.expose = "22 80 8101"
     dockerfile.prefix('USER', 'plone')
 
-    image = client.build_from_file(dockerfile, tag='hostout/buildoutbase', rm=True)
+    #image = client.build_from_file(dockerfile, tag='hostout/%s' % hostimage, rm=True)
+    image = hostimage
 
     # retry where we left off
     # HACK. What if the buildoutbase changed?
@@ -1236,7 +1253,7 @@ def docker():
         failedimage = failedimage[0]
         # if image is in the history of our failed image then we can use it
         for history_image in client.history(failedimage):
-            if history_image['Id'][:len(image)] == image:
+            if history_image.get('Id','')[:len(image)] == image:
                 baseimage = failedimage
                 break
     if baseimage != failedimage:
@@ -1245,7 +1262,7 @@ def docker():
         print "uploading updated local buildout into previous failed image of %s" % baseimage
 
 
-    dockerfile = DockerFile(baseimage, maintainer='ME, me@example.com')
+#    dockerfile = DockerFile(baseimage, maintainer='ME, me@example.com')
 
     _, bundle_file = tempfile.mkstemp(suffix='.tar')
     def reset(tarinfo):
