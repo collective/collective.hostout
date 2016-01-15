@@ -3,7 +3,8 @@ app:
   image: hostout/app
   ports:
    - "8080"
-  volumes_from: app_var
+  volumes_from:
+   - app_var
   links:
    - redis
    - db:zeo

@@ -1242,27 +1242,33 @@ def docker():
 #    dockerfile.expose = "22 80 8101"
     dockerfile.prefix('USER', 'plone')
 
-    #image = client.build_from_file(dockerfile, tag='hostout/%s' % hostimage, rm=True)
-    image = hostimage
+    image = client.build_from_file(dockerfile, tag='hostout/%s:base' % hostout.name)
+    if not image:
+        return
+    #image = hostimage
+
+    def is_baseimage_of(base, imagename):
+        image = [i['Id'] for i in client.images() if imagename in i['RepoTags']]
+        if image:
+            image = image[0]
+        else:
+            return False
+        for history_image in client.history(image):
+            if history_image.get('Id','')[:len(base)] == image:
+                return True
+        return False
+
 
     # retry where we left off
     # HACK. What if the buildoutbase changed?
-    failedimage = [i['Id'] for i in client.images() if "hostout/%s:latest" % hostout.name in i['RepoTags']]
-    baseimage = image #'hostout/buildoutbase'
-    if failedimage:
-        failedimage = failedimage[0]
-        # if image is in the history of our failed image then we can use it
-        for history_image in client.history(failedimage):
-            if history_image.get('Id','')[:len(image)] == image:
-                baseimage = failedimage
-                break
-    if baseimage != failedimage:
-        print "building new image on top of hostout/buildoutbase:%s" % baseimage
-    else:
+    if is_baseimage_of(image, "hostout/%s:latest" % hostout.name):
+        baseimage = "hostout/%s:latest" % hostout.name
         print "uploading updated local buildout into previous failed image of %s" % baseimage
+    else:
+        baseimage = image
+        print "building new image on top of %s" % baseimage
 
-
-#    dockerfile = DockerFile(baseimage, maintainer='ME, me@example.com')
+    dockerfile = DockerFile(baseimage, maintainer='ME, me@example.com')
 
     _, bundle_file = tempfile.mkstemp(suffix='.tar')
     def reset(tarinfo):
@@ -1310,7 +1316,7 @@ def docker():
 
 #    EXPOSE 8080
 ##    #CMD ["/usr/bin/supervisord"]
-    image = client.build_from_file(dockerfile, tag='hostout/%s' % hostout.name, rm=True, stream=True)
+    image = client.build_from_file(dockerfile, tag='hostout/%s:latest' % hostout.name, rm=True, stream=True)
 
     if not image:
         return False
@@ -1342,7 +1348,7 @@ def docker():
         return
 
     # if it succeeded finish it off.
-    dockerfile = DockerFile(image[u'Id'], maintainer='ME, me@example.com')
+    dockerfile = DockerFile("hostout/%s:latest" % hostout.name, maintainer='ME, me@example.com')
     dockerfile.prefix('WORKDIR', path)
 #    dockerfile.expose = "22 80 8101"
     dockerfile.prefix('USER', 'plone')
@@ -1355,7 +1361,8 @@ def docker():
     commands += hostout.getPostCommands()
     command = ' && '.join(commands)
     dockerfile.command=['/bin/bash', '-c', '%s' % (command)]
-    image = client.build_from_file(dockerfile, tag="hostout/%s" % hostout.name, rm=True)
+    image = client.build_from_file(dockerfile, tag="hostout/%s:latest" % hostout.name)
+    print "Final image created %s" % image
 
 
 
