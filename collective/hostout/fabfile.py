@@ -1248,14 +1248,14 @@ def docker():
     #image = hostimage
 
     def is_baseimage_of(base, imagename):
-        image = [i['Id'] for i in client.images() if imagename in i['RepoTags']]
-        if image:
-            image = image[0]
-        else:
-            return False
-        for history_image in client.history(image):
-            if history_image.get('Id','')[:len(base)] == image:
-                return True
+        #import pdb; pdb.set_trace()
+        for i in client.images():
+            if imagename not in i['RepoTags']:
+                continue
+            image = i['Id']
+            for history_image in client.history(image):
+                if history_image.get('Id','')[:len(base)] == base:
+                    return True
         return False
 
 
