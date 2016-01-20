@@ -1176,25 +1176,32 @@ def docker():
     #client.build_from_file(dockerfile, tag="pretagov/python27", rm=True)
 
 
-    hostimage = api.env.get('hostimage', 'ubuntu')
+    hostimage = api.env.get('hostimage', 'alpine')
 
     dockerfile = DockerFile(hostimage, maintainer='ME, me@example.com')
     # TODO: need a way to install python on any platform
     # TODO: Need a way to get rid of buildtools after running buildout
-    dockerfile.run_all("(apt-get update && apt-get upgrade -y -q && apt-get dist-upgrade -y -q && apt-get -y -q autoclean && apt-get -y -q autoremove)")
-    dockerfile.run_all("apt-get install -y -q --fix-missing "
-                       "python-dev python-pip "
-                       "python-imaging python-lxml python-cjson "
-                       "libssl-dev "
-                       #"libsasl2-dev "
-                       #"libldap2-dev python-ldap  "
-#                       "libgif-dev libjpeg62-dev libpng12-dev libfreetype6-dev "
-                       "libxml2-dev "
-                       "libxslt1-dev ncurses-dev libedit-dev libltdl-dev "
-                       "groff groff-base && "
-                       "pip install virtualenvwrapper && "
-                       'adduser --system --disabled-password --shell /bin/bash '
-                       '--group --home /home/plone --gecos "Plone system user" plone')
+    if 'ubuntu' in hostimage:
+        dockerfile.run_all("(apt-get update && apt-get upgrade -y -q && apt-get dist-upgrade -y -q && apt-get -y -q autoclean && apt-get -y -q autoremove)")
+        dockerfile.run_all("apt-get install -y -q --ignore-missing "
+                           "python-dev python-pip "
+                           "python-imaging python-lxml python-cjson "
+                           "libssl-dev "
+                           #"libsasl2-dev "
+                           #"libldap2-dev python-ldap  "
+    #                       "libgif-dev libjpeg62-dev libpng12-dev libfreetype6-dev "
+                           "libxml2-dev "
+                           "libxslt1-dev ncurses-dev libedit-dev libltdl-dev "
+                           "groff groff-base && "
+                           "pip install virtualenvwrapper && "
+                           'adduser --system --disabled-password --shell /bin/bash '
+                           '--group --home /home/plone --gecos "Plone system user" plone')
+    elif 'alpine' in hostimage:
+        dockerfile.run_all("apk --no-cache add python build-base python-dev "
+                           "py-pip ca-certificates && "
+                           "update-ca-certificates && "
+                           "pip install virtualenvwrapper")
+        dockerfile.run_all('addgroup plone && adduser -S -D -s /bin/bash -G plone -h /home/plone -g "Plone system user" plone')
 
 
     hostout = api.env.hostout
@@ -1219,6 +1226,7 @@ def docker():
 
     dockerfile.prefix('ENV', 'TMPDIR %s/var/tmp' % path)
     dockerfile.prefix('WORKDIR', path)
+    dockerfile.run_all(' && '.join(hostout.getPreCommands()))
     bootstrap = resource_filename(__name__, 'bootstrap.py')
 #    dockerfile.add_file(bootstrap, 'bootstrap.py')
     cmds = ["""python -c "import urllib; urllib.urlretrieve('%s', '%s')" """ %
@@ -1232,8 +1240,6 @@ def docker():
                             % dict(path=path, bv=buildout_version, bf="buildout.cfg", sv=setuptools_version)]
     dockerfile.run_all(' && '.join(cmds))
 
-    for cmd in hostout.getPreCommands():
-        dockerfile.run_all(cmd)
     #HACK
     #dockerfile.run_all('apt-get install python-docutils')
     dockerfile.prefix('USER', 'root')
@@ -1360,7 +1366,7 @@ def docker():
     ]
     commands += hostout.getPostCommands()
     command = ' && '.join(commands)
-    dockerfile.command=['/bin/bash', '-c', '%s' % (command)]
+    dockerfile.command=['/bin/sh', '-c', '%s' % (command)]
     image = client.build_from_file(dockerfile, tag="hostout/%s:latest" % hostout.name)
     print "Final image created %s" % image
 
