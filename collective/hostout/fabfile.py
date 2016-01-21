@@ -1195,13 +1195,13 @@ def docker():
                            "groff groff-base && "
                            "pip install virtualenvwrapper && "
                            'adduser --system --disabled-password --shell /bin/bash '
-                           '--group --home /home/plone --gecos "Plone system user" plone')
+                           '--group --home /home/plone --gecos "Plone system user" -u 1000 -g 1000 plone')
     elif 'alpine' in hostimage:
         dockerfile.run_all("apk --no-cache add python build-base python-dev "
                            "py-pip ca-certificates && "
                            "update-ca-certificates && "
                            "pip install virtualenvwrapper")
-        dockerfile.run_all('addgroup plone && adduser -S -D -s /bin/bash -G plone -h /home/plone -g "Plone system user" plone')
+        dockerfile.run_all('addgroup -g 1000 plone && adduser -S -D -s /bin/bash -G plone -h /home/plone -g "Plone system user" -u 1000 plone')
 
 
     hostout = api.env.hostout
