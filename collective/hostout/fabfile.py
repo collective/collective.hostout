@@ -111,8 +111,8 @@ def get(file, target=None):
 
 def deploy():
     "predeploy, uploadeggs, uploadbuildout, buildout and then postdeploy"
-    
-    
+
+
     hostout = api.env['hostout']
     hostout.predeploy()
     hostout.uploadeggs()
@@ -134,7 +134,7 @@ def predeploy():
                 api.run("[ -e %s/bin/buildout ]"%api.env.path, pty=True)
             except:
                 hasBuildout = False
-    
+
     if not hasBuildoutUser or not hasBuildout:
         raise Exception ("Target deployment does not seem to have been bootstraped.")
 
@@ -158,8 +158,8 @@ def precommands():
 # if buildout is run without uploadeggs then no pinned dev eggs versions exist. in which case need
 # to upload dummy pinned versions file.
 
-# buildout will upload file like staging_20100411-23:04:04-[uid].cfg 
-# which extends=staging.cfg hostoutversions.cfg devpins.cfg 
+# buildout will upload file like staging_20100411-23:04:04-[uid].cfg
+# which extends=staging.cfg hostoutversions.cfg devpins.cfg
 
 # scenarios
 # using buildout only
@@ -174,7 +174,7 @@ def precommands():
 @buildoutuser
 def uploadeggs():
     """Release developer eggs and send to host """
-    
+
     hostout = api.env['hostout']
 
     #need to send package. cycledown servers, install it, run buildout, cycle up servers
@@ -185,7 +185,7 @@ def uploadeggs():
 
     for pkg in hostout.localEggs():
         name = os.path.basename(pkg)
-        
+
         if name not in contents:
             tmp = os.path.join('/tmp', name)
             api.put(pkg, tmp)
@@ -237,7 +237,7 @@ def buildout(*args):
     #upload generated cfg with hostout versions
     hostout.getHostoutPackage() # we need this work out releaseid
     filename = "%s-%s.cfg" % (hostout.name, hostout.releaseid)
-    
+
     with cd(api.env.path):
         tmp = tempfile.NamedTemporaryFile()
         tmp.write(hostout_file)
@@ -262,7 +262,7 @@ def sudobuildout(*args):
     filename = "%s-%s.cfg" % (hostout.name, hostout.releaseid)
     with cd(api.env.path):
         api.sudo('bin/buildout -c %s %s' % (filename, ' '.join(args)))
-    
+
 
 def postdeploy():
     """Perform any final plugin tasks """
@@ -293,7 +293,7 @@ def bootstrap():
 
     if not hostos:
         hostos = api.env.hostout.detecthostos().lower()
-        
+
     cmd = getattr(api.env.hostout, 'bootstrap_users_%s'%hostos, api.env.hostout.bootstrap_users)
     cmd()
 
@@ -339,10 +339,10 @@ def setowners():
     dist = os.path.join(dl, 'dist')
     ec = hostout.getEggCache()
     var = os.path.join(path, 'var')
-    
+
     # What we want is for - login user to own the buildout and the cache.  -
     # effective user to be own the var dir + able to read buildout and cache.
-    
+
     api.env.hostout.runescalatable ("find %(path)s  -maxdepth 1 -mindepth 1 ! -name var -exec chown -R %(buildout)s:%(buildoutgroup)s '{}' \; " \
              " -exec chmod -R u+rw,g+r-w,o-rw '{}' \;" % locals())
 
@@ -367,12 +367,12 @@ def setowners():
             pass
             #raise Exception ("Was not able to set owner and permissions on "\
             #            "%(var)s to %(effective)s:%(buildoutgroup)s with u+rw,g+wrs,o-rw" % locals() )
-        
+
 
 #    api.sudo("chmod g+x `find %(path)s -perm -g-x` || find %(path)s -perm -g-x -exec chmod g+x '{}' \;" % locals()) #so effective can execute code
 #    api.sudo("chmod g+s `find %(path)s -type d` || find %(path)s -type d -exec chmod g+s '{}' \;" % locals()) # so new files will keep same group
 #    api.sudo("chmod g+s `find %(path)s -type d` || find %(path)s -type d -exec chmod g+s '{}' \;" % locals()) # so new files will keep same group
-    
+
     api.env.hostout.runescalatable('mkdir -p %s %s/dist %s' % (bc, dl, ec))
 
     # the buildout dir should not be accessible to anyone but the buildout group
@@ -597,10 +597,10 @@ def getpythonbin():
 
 def bootstrap_python_buildout():
     "Install python from source via buildout"
-    
+
     #TODO: need a better way to install from source that doesn't need svn or python
     # we need libssl-dev, python and other buildtools
-    
+
     path = api.env.path
 
     BUILDOUT = """
@@ -618,10 +618,10 @@ parts =
       ${buildout:libjpeg-parts}
       ${buildout:python%(majorshort)s-parts}
       ${buildout:links-parts}
-      
+
 python-buildout-root = ${buildout:directory}/src
 
-# ucs4 is needed as lots of eggs like lxml are also compiled with ucs4 since most linux distros compile with this      
+# ucs4 is needed as lots of eggs like lxml are also compiled with ucs4 since most linux distros compile with this
 [python-%(major)s-build:default]
 extra_options +=
     --enable-unicode=ucs4
@@ -764,9 +764,9 @@ def bootstrap_python(extra_args=""):
     version = api.env['python-version']
 
     versionParsed = '.'.join(version.split('.')[:3])
-    
+
     d = dict(version=versionParsed)
-    
+
     prefix = api.env["python-path"]
     if not prefix:
         raise "No path for python set"
@@ -775,7 +775,7 @@ def bootstrap_python(extra_args=""):
     with cd('/'):
         runescalatable('mkdir -p %s' % prefix)
     #api.run("([-O %s])"%prefix)
-    
+
     with asbuildoutuser():
       with cd('/tmp'):
         get_url('http://python.org/ftp/python/%(version)s/Python-%(version)s.tgz'%d)
@@ -783,7 +783,7 @@ def bootstrap_python(extra_args=""):
         with cd('Python-%(version)s'%d):
 #            api.run("sed 's/#readline/readline/' Modules/Setup.dist > TMPFILE && mv TMPFILE Modules/Setup.dist")
 #            api.run("sed 's/#_socket/_socket/' Modules/Setup.dist > TMPFILE && mv TMPFILE Modules/Setup.dist")
-            
+
             api.run('./configure --prefix=%(prefix)s  --enable-unicode=ucs4 --with-threads --with-readline --with-dbm --with-zlib --with-ssl --with-bz2 %(extra_args)s' % locals())
             api.run('make')
             runescalatable('make altinstall')
@@ -797,11 +797,11 @@ def bootstrap_python_ubuntu():
     """Update ubuntu with build tools, python and bootstrap buildout"""
     hostout = api.env.get('hostout')
     path = api.env.path
-     
-    
+
+
     version = api.env['python-version']
     major = '.'.join(version.split('.')[:2])
-    
+
 
     try:
         api.sudo('apt-get -yq install software-properties-common python-software-properties')
@@ -811,9 +811,9 @@ def bootstrap_python_ubuntu():
         pass
 
     api.sudo('apt-get update')
-    
+
     #Install and Update Dependencies
-    
+
 
     #contrib.files.append(apt_source, '/etc/apt/source.list', use_sudo=True)
     api.sudo('apt-get -yq update ')
@@ -854,7 +854,7 @@ def bootstrap_python_ubuntu():
     #rm python2.4-minimal.deb python2.4.deb python2.4-dev.deb
 
     # python-profiler?
-    
+
 def bootstrap_python_redhat():
     hostout = api.env.get('hostout')
     #Install and Update Dependencies
@@ -900,7 +900,7 @@ def bootstrap_python_redhat():
     except:
         pass
 
-    
+
     # RedHat pacakge management install
 
     # Redhat/centos don't have Python 2.6 or 2.7 in stock yum repos, use
@@ -994,7 +994,7 @@ def bootstrap_allowsudo():
         api.sudo("egrep \"^Defaults\:\%%%(user)s\ \!requiretty\" \"/etc/sudoers\"" % dict(user=user), pty=True)
     except:
         api.sudo("echo 'Defaults:%%%(user)s !requiretty' >> /etc/sudoers" % dict(user=user), pty=True)
-    
+
 
 
 
@@ -1013,7 +1013,7 @@ def bootstrap_allowsudo():
 def install_bootscript (startcmd, stopcmd, prefname=""):
     """Installs a system bootscript"""
     hostout = api.env.hostout
-    
+
     buildout = hostout.getRemoteBuildoutPath()
     name = "buildout-" + (prefname or hostout.name)
 
@@ -1076,7 +1076,7 @@ exit $REVAL
 #    tmpfile.close()
 #    api.put(tmpname, '/tmp/%s'%name)
 #    api.sudo("mv /tmp/%s %s" %(name, path))
-    
+
     # Create script destroying one if it already exists
     api.sudo ("test -f '%(path)s' && rm '%(path)s' || echo 'pass'" % locals())
     contrib.files.append(
@@ -1085,17 +1085,17 @@ exit $REVAL
         use_sudo=True )
     api.sudo ("chown root '%(path)s'" % locals())
     api.sudo ("chmod +x '%(path)s'" % locals())
-    
-    
+
+
     # Install script into system rc dirs
     api.sudo (  ("(which update-rc.d && update-rc.d '%(name)s' defaults) || "
                 "(test -f /sbin/chkconfig && /sbin/chkconfig --add '%(name)s')") % locals() )
-        
+
 
 def uninstall_bootscript (prefname=""):
     """Uninstalls a system bootscript"""
     hostout = api.env.hostout
-    name = "buildout-" + (prefname or hostout.name)	
+    name = "buildout-" + (prefname or hostout.name)
     path = os.path.join("/etc/init.d", name)
     api.sudo ((";(which update-rc.d && update-rc.d -f '%(name)s' remove) || "
               "(test -f /sbin/chkconfig && (/sbin/chkconfig --del '%(name)s' || echo 'pass' ))") % locals())
@@ -1248,7 +1248,7 @@ def docker():
 #    dockerfile.expose = "22 80 8101"
     dockerfile.prefix('USER', 'plone')
 
-    image = client.build_from_file(dockerfile, tag='hostout/%s:base' % hostout.name)
+    image = client.build_from_file(dockerfile, tag='hostout/%s:base' % hostout.name, rm=True)
     if not image:
         return
     #image = hostimage
@@ -1367,9 +1367,5 @@ def docker():
     commands += hostout.getPostCommands()
     command = ' && '.join(commands)
     dockerfile.command=['/bin/sh', '-c', '%s' % (command)]
-    image = client.build_from_file(dockerfile, tag="hostout/%s:latest" % hostout.name)
+    image = client.build_from_file(dockerfile, tag="hostout/%s:latest" % hostout.name, rm=True)
     print "Final image created %s" % image
-
-
-
-
