@@ -1182,8 +1182,12 @@ def docker():
     # TODO: need a way to install python on any platform
     # TODO: Need a way to get rid of buildtools after running buildout
     if 'ubuntu' in hostimage:
-        dockerfile.run_all("apt-get update && apt-get upgrade -y -q"
-                           "apt-get dist-upgrade -y -q && apt-get -y -q autoclean && apt-get -y -q autoremove")
+        dockerfile.run_all("rm -rf /var/lib/apt/lists/* &&"
+                           "apt-get update &&"
+                           "apt-get upgrade -y -q &&"
+                           "apt-get dist-upgrade -y -q &&"
+                           "apt-get -y -q autoclean &&"
+                           "apt-get -y -q autoremove")
         dockerfile.run_all('adduser --system --disabled-password --shell /bin/bash '
                            '--group --home /home/plone --gecos "Plone system user" -u 1000 plone')
     elif 'alpine' in hostimage:
