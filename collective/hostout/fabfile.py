@@ -1182,23 +1182,12 @@ def docker():
     # TODO: need a way to install python on any platform
     # TODO: Need a way to get rid of buildtools after running buildout
     if 'ubuntu' in hostimage:
-        dockerfile.run_all("(apt-get update && apt-get upgrade -y -q && apt-get dist-upgrade -y -q && apt-get -y -q autoclean && apt-get -y -q autoremove)")
-        dockerfile.run_all("apt-get install -y -q --ignore-missing "
-                           "python-dev python-pip "
-                           "python-imaging python-lxml python-cjson "
-                           "libssl-dev "
-                           #"libsasl2-dev "
-                           #"libldap2-dev python-ldap  "
-    #                       "libgif-dev libjpeg62-dev libpng12-dev libfreetype6-dev "
-                           "libxml2-dev "
-                           "libxslt1-dev ncurses-dev libedit-dev libltdl-dev "
-                           "groff groff-base && "
-                           "pip install virtualenvwrapper && "
-                           'adduser --system --disabled-password --shell /bin/bash '
-                           '--group --home /home/plone --gecos "Plone system user" -u 1000 -g 1000 plone')
+        dockerfile.run_all("apt-get update && apt-get upgrade -y -q"
+                           "apt-get dist-upgrade -y -q && apt-get -y -q autoclean && apt-get -y -q autoremove")
+        dockerfile.run_all('adduser --system --disabled-password --shell /bin/bash '
+                           '--group --home /home/plone --gecos "Plone system user" -u 1000 plone')
     elif 'alpine' in hostimage:
-        dockerfile.run_all("apk --no-cache add python build-base python-dev "
-                           "py-pip ca-certificates && "
+        dockerfile.run_all("py-pip ca-certificates && "
                            "update-ca-certificates && "
                            "pip install virtualenvwrapper")
         dockerfile.run_all('addgroup -g 1000 plone && adduser -S -D -s /bin/bash -G plone -h /home/plone -g "Plone system user" -u 1000 plone')
