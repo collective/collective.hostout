@@ -1144,43 +1144,11 @@ try:
 except:
     pass
 
-def docker():
-    """ If we use a straight dockerfile approach then any change in the buildout or failure during buildout
-        means we have to start again.
-        Instead we will
-        1. build a base image for buildout using dockerfile
-        2. create a image with all our custom buildout files in using dockerfile
-        3. run the buildout and save the image even if the buildout fails
-        4. if failed then repeat 2 but use the failed image as the base image
-        5. if passed then flatten the image and tag
-    """
 
-
-
-#    from dockerfabric.apiclient import docker_fabric
-#    import pdb; pdb.set_trace()
-    # http://docker-py.readthedocs.org/en/latest/boot2docker/index.html?highlight=tls
-    # kwargs = kwargs_from_env()
-    # kwargs['tls'].assert_hostname = False
-    # see https://github.com/docker/docker-py/issues/731
-    client = myclient(**kwargs_from_env(assert_hostname=False))
-    #dockerfile = DockerFile('ubuntu', maintainer='ME, me@example.com')
-    ##dockerfile.add_file(...)
-    #dockerfile.run_all('(apt-get update && apt-get upgrade -y -q && apt-get dist-upgrade -y -q && apt-get -y -q autoclean && apt-get -y -q autoremove)')
-    #dockerfile.run_all('apt-get install -y -q git-core python build-essential python-distribute openssl libssl-dev')
-    #dockerfile.run_all('(mkdir -p /opt/BUILDOUT && cd /opt/BUILDOUT)')
-    #dockerfile.run_all('(cd /opt/BUILDOUT && git clone https://github.com/collective/buildout.python.git)')
-    #dockerfile.run_all("(cd /opt/BUILDOUT/buildout.python && sed -i '/python[2-3][1-6:8-9]/d' buildout.cfg )")
-    #dockerfile.run_all("(cd /opt/BUILDOUT/buildout.python && python bootstrap.py && ./bin/buildout )")
-    #dockerfile.run_all("(cd /opt/BUILDOUT/buildout.python )")
-    #client.build_from_file(dockerfile, tag="pretagov/python27", rm=True)
-
-
-    hostimage = api.env.get('hostimage', 'alpine')
-
-    dockerfile = DockerFile(hostimage, maintainer='ME, me@example.com')
+def _basedockerfile(dockerfile):
     # TODO: need a way to install python on any platform
     # TODO: Need a way to get rid of buildtools after running buildout
+    hostimage = api.env.get('hostimage', 'alpine')
     if 'python' in hostimage:
         dockerfile.run_all("pip install virtualenvwrapper")
         dockerfile.run_all('adduser --system --disabled-password --shell /bin/bash '
@@ -1245,6 +1213,101 @@ def docker():
 #    dockerfile.expose = "22 80 8101"
     dockerfile.prefix('USER', 'plone')
 
+
+def _buildoutdockerfile(dockerfile, bundle_file, buildout_filename):
+    hostout = api.env.hostout
+    path = api.env.path
+
+    def reset(tarinfo):
+        tarinfo.uid = tarinfo.gid = 0
+        tarinfo.uname = tarinfo.gname = "plone"
+        return tarinfo
+
+    bundle = tarfile.open(bundle_file, 'w:')
+    for pkg in hostout.localEggs():
+        name = os.path.basename(pkg)
+        #dockerfile.add_file(pkg, os.path.join(dl, 'dist', name))
+        bundle.add(pkg, os.path.join(path, 'dist', name), filter=reset)
+
+    # move our buildout files over
+    for fileabs, filerel in hostout.getHostoutPackageFiles():
+        bundle.add(fileabs, os.path.join(path, filerel), filter=reset )
+
+    # Now upload pinned.cfg.
+    pinned = "[buildout]\ndevelop=\nauto-checkout=\n" + \
+        "find-links += "+ os.path.join(path, 'dist') + '\n' \
+        "[versions]\n"+hostout.packages.developVersions()
+    pinnedtmp = open('parts/pinned.cfg',"w")
+    pinnedtmp.write(pinned)
+    pinnedtmp.close()
+    bundle.add(pinnedtmp.name, os.path.join(path, 'pinned.cfg'), filter=reset)
+
+
+    #upload generated cfg with hostout versions
+    hostout_file=hostout.getHostoutFile()
+    try:
+        overwrite = open('parts/'+buildout_filename, "r").read() != hostout_file
+    except IOError:
+        overwrite = True
+
+    if overwrite:
+        hostout_tmp = open('parts/'+buildout_filename, "w")
+        hostout_tmp.write(hostout_file)
+        hostout_tmp.close()
+    bundle.add('parts/'+buildout_filename, os.path.join(path, buildout_filename), filter=reset)
+
+    bundle.close()
+    dockerfile.add_file(bundle_file, '/', bundle_file)
+
+def _startupdockerfile(dockerfile, buildout_filename):
+    hostout = api.env.hostout
+    path = api.env.path
+    dockerfile.prefix('WORKDIR', path)
+#    dockerfile.expose = "22 80 8101"
+    dockerfile.prefix('USER', 'plone')
+    # on run we do one quick offline build so we can include env vars
+    commands = ['cd %s' % path,
+                'chown -R plone.plone var',
+                'chmod -R a+rwx var',
+                './bin/buildout -NOc %s' % buildout_filename,
+    ]
+    commands += hostout.getPostCommands()
+    command = ' && '.join(commands)
+    dockerfile.command=['/bin/sh', '-c', '%s' % (command)]
+
+def dockerfile(path):
+    hostout = api.env.hostout
+    hostimage = api.env.get('hostimage', 'alpine')
+    dockerfile = DockerFile(hostimage, maintainer='ME, me@example.com')
+    _basedockerfile(dockerfile)
+    buildout_filename = "hostout-gen-%s.cfg" % hostout.name
+    bundle_file = os.path.join(path, 'buildout_bundle.tar')
+    if not os.path.exists(path):
+        os.makedirs(path)
+    _buildoutdockerfile(dockerfile, bundle_file, buildout_filename)
+    _startupdockerfile(dockerfile, buildout_filename)
+    with open(os.path.join(path, 'DockerFile'), "w") as dfile:
+        dfile.write(dockerfile.getvalue())
+
+
+def dockerbuild():
+    """ If we use a straight dockerfile approach then any change in the buildout or failure during buildout
+        means we have to start again.
+        Instead we will
+        1. build a base image for buildout using dockerfile
+        2. create a image with all our custom buildout files in using dockerfile
+        3. run the buildout and save the image even if the buildout fails
+        4. if failed then repeat 2 but use the failed image as the base image
+        5. if passed then flatten the image and tag
+    """
+    hostout = api.env.hostout
+    path = api.env.path
+    client = myclient(**kwargs_from_env(assert_hostname=False))
+    hostimage = api.env.get('hostimage', 'alpine')
+
+    dockerfile = DockerFile(hostimage, maintainer='ME, me@example.com')
+    _basedockerfile(dockerfile)
+
     image = client.build_from_file(dockerfile, tag='hostout/%s:base' % hostout.name, rm=True)
     if not image:
         return
@@ -1272,53 +1335,11 @@ def docker():
         print "building new image on top of %s" % baseimage
 
     dockerfile = DockerFile(baseimage, maintainer='ME, me@example.com')
-
-    _, bundle_file = tempfile.mkstemp(suffix='.tar')
-    def reset(tarinfo):
-        tarinfo.uid = tarinfo.gid = 0
-        tarinfo.uname = tarinfo.gname = "plone"
-        return tarinfo
-
-    bundle = tarfile.open(bundle_file, 'w:')
-    for pkg in hostout.localEggs():
-        name = os.path.basename(pkg)
-        #dockerfile.add_file(pkg, os.path.join(dl, 'dist', name))
-        bundle.add(pkg, os.path.join(path, 'dist', name), filter=reset)
-
-    # move our buildout files over
-    for fileabs, filerel in hostout.getHostoutPackageFiles():
-        bundle.add(fileabs, os.path.join(path, filerel), filter=reset )
-
-    # Now upload pinned.cfg.
-    pinned = "[buildout]\ndevelop=\nauto-checkout=\n" + \
-        "find-links += "+ os.path.join(path, 'dist') + '\n' \
-        "[versions]\n"+hostout.packages.developVersions()
-    pinnedtmp = open('parts/pinned.cfg',"w")
-    pinnedtmp.write(pinned)
-    pinnedtmp.close()
-    bundle.add(pinnedtmp.name, os.path.join(path, 'pinned.cfg'), filter=reset)
-
-
-   #upload generated cfg with hostout versions
-    #buildout_filename = "%s-%s.cfg" % (hostout.name, hostout.releaseid)
     buildout_filename = "hostout-gen-%s.cfg" % hostout.name
-    hostout_file=hostout.getHostoutFile()
-    try:
-        overwrite = open('parts/'+buildout_filename, "r").read() != hostout_file
-    except IOError:
-        overwrite = True
+    _, bundle_file = tempfile.mkstemp(suffix='.tar')
 
-    if overwrite:
-        hostout_tmp = open('parts/'+buildout_filename, "w")
-        hostout_tmp.write(hostout_file)
-        hostout_tmp.close()
-    bundle.add('parts/'+buildout_filename, os.path.join(path, buildout_filename), filter=reset)
+    _buildoutdockerfile(dockerfile, bundle_file, buildout_filename)
 
-    bundle.close()
-    dockerfile.add_file(bundle_file, '/', bundle_file)
-
-#    EXPOSE 8080
-##    #CMD ["/usr/bin/supervisord"]
     image = client.build_from_file(dockerfile, tag='hostout/%s:latest' % hostout.name, rm=True, stream=True)
 
     if not image:
@@ -1352,17 +1373,6 @@ def docker():
 
     # if it succeeded finish it off.
     dockerfile = DockerFile("hostout/%s:latest" % hostout.name, maintainer='ME, me@example.com')
-    dockerfile.prefix('WORKDIR', path)
-#    dockerfile.expose = "22 80 8101"
-    dockerfile.prefix('USER', 'plone')
-    # on run we do one quick offline build so we can include env vars
-    commands = ['cd %s' % path,
-                'chown -R plone.plone var',
-                'chmod -R a+rwx var',
-                './bin/buildout -NOc %s' % buildout_filename,
-    ]
-    commands += hostout.getPostCommands()
-    command = ' && '.join(commands)
-    dockerfile.command=['/bin/sh', '-c', '%s' % (command)]
+    _startupdockerfile(dockerfile, buildout_filename)
     image = client.build_from_file(dockerfile, tag="hostout/%s:latest" % hostout.name, rm=True)
     print "Final image created %s" % image
