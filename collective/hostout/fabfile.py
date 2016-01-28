@@ -1181,17 +1181,21 @@ def docker():
     dockerfile = DockerFile(hostimage, maintainer='ME, me@example.com')
     # TODO: need a way to install python on any platform
     # TODO: Need a way to get rid of buildtools after running buildout
-    if 'ubuntu' in hostimage:
+    if 'python' in hostimage:
+        dockerfile.run_all("pip install virtualenvwrapper")
+        dockerfile.run_all('adduser --system --disabled-password --shell /bin/bash '
+                           '--group --home /home/plone --gecos "Plone system user" -u 1000 plone')
+    elif 'ubuntu' in hostimage:
         dockerfile.run_all("rm -rf /var/lib/apt/lists/* &&"
                            "apt-get update &&"
                            "apt-get upgrade -y -q &&"
                            "apt-get dist-upgrade -y -q &&"
                            "apt-get -y -q autoclean &&"
-                           "apt-get -y -q autoremove")
-        dockerfile.run_all('adduser --system --disabled-password --shell /bin/bash '
-                           '--group --home /home/plone --gecos "Plone system user" -u 1000 plone')
+                           "apt-get -y -q autoremove && "
+                           "apt-get install -y -q --fix-missing python-dev python-pip libssl-dev && "
+                           "pip install virtualenvwrapper")
     elif 'alpine' in hostimage:
-        dockerfile.run_all("py-pip ca-certificates && "
+        dockerfile.run_all("apk --no-cache add python python-dev build-base py-pip ca-certificates && "
                            "update-ca-certificates && "
                            "pip install virtualenvwrapper")
         dockerfile.run_all('addgroup -g 1000 plone && adduser -S -D -s /bin/bash -G plone -h /home/plone -g "Plone system user" -u 1000 plone')
