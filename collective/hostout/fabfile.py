@@ -1,3 +1,4 @@
+import shutil
 import sys
 import os
 import os.path
@@ -1162,6 +1163,8 @@ def _basedockerfile(dockerfile):
                            "apt-get -y -q autoremove && "
                            "apt-get install -y -q --fix-missing python-dev python-pip libssl-dev && "
                            "pip install virtualenvwrapper")
+        dockerfile.run_all('adduser --system --disabled-password --shell /bin/bash '
+                           '--group --home /home/plone --gecos "Plone system user" -u 1000 plone')
     elif 'alpine' in hostimage:
         dockerfile.run_all("apk --no-cache add python python-dev build-base py-pip ca-certificates && "
                            "update-ca-certificates && "
@@ -1184,7 +1187,7 @@ def _basedockerfile(dockerfile):
     cmds += ['mkdir -p %s %s %s' % (os.path.join(buildoutcache, "eggs"),
                                               os.path.join(dl, "dist"),
                                               os.path.join(dl, "extends"))]
-    cmds += ['chown -R plone.plone %s' % buildoutcache]
+    cmds += ['chown -R plone:plone %s' % buildoutcache]
     cmds += ['mkdir -p %s' % (path)]
     cmds += ["mkdir -p %s/var/tmp" % path]
     dockerfile.run_all(' && '.join(cmds))
@@ -1267,7 +1270,7 @@ def _startupdockerfile(dockerfile, buildout_filename):
     dockerfile.prefix('USER', 'plone')
     # on run we do one quick offline build so we can include env vars
     commands = ['cd %s' % path,
-                'chown -R plone.plone var',
+                'chown -R plone:plone var',
                 'chmod -R a+rwx var',
                 './bin/buildout -NOc %s' % buildout_filename,
     ]
@@ -1275,19 +1278,29 @@ def _startupdockerfile(dockerfile, buildout_filename):
     command = ' && '.join(commands)
     dockerfile.command=['/bin/sh', '-c', '%s' % (command)]
 
-def dockerfile(path):
+def dockerfile(path=None):
     hostout = api.env.hostout
+    if path is None:
+        path = hostout.name
+    if not os.path.exists(path):
+        os.makedirs(path)
+    ## needs to be done relative to the base dir
+    #hostout.getHostoutFile()
+    #old_path = os.getcwd()
+    #os.chdir(path)
+
     hostimage = api.env.get('hostimage', 'alpine')
     dockerfile = DockerFile(hostimage, maintainer='ME, me@example.com')
     _basedockerfile(dockerfile)
     buildout_filename = "hostout-gen-%s.cfg" % hostout.name
-    bundle_file = os.path.join(path, 'buildout_bundle.tar')
-    if not os.path.exists(path):
-        os.makedirs(path)
-    _buildoutdockerfile(dockerfile, bundle_file, buildout_filename)
+    _buildoutdockerfile(dockerfile, 'buildout_bundle.tar', buildout_filename)
+    dockerfile.run_all('./bin/buildout -Nc %s' % (buildout_filename))
     _startupdockerfile(dockerfile, buildout_filename)
-    with open(os.path.join(path, 'DockerFile'), "w") as dfile:
+    dockerfile.finalize()
+    with open(os.path.join(path, 'Dockerfile'), "w") as dfile:
         dfile.write(dockerfile.getvalue())
+    shutil.copyfile('buildout_bundle.tar', os.path.join(path, 'buildout_bundle.tar'))
+    #os.chdir(old_path)
 
 
 def dockerbuild():
