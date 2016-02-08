@@ -1293,16 +1293,16 @@ def dockerfile(path=None):
     dockerfile = DockerFile(hostimage, maintainer='ME, me@example.com')
     _basedockerfile(dockerfile)
 
-    # If a basebuildout file exists, run it as an additional step to allow
-    # common eggs to be cached.
-    bb_filename = 'basebuildout_%s.cfg' % hostout.name
-    if os.path.isfile(bb_filename):
-        shutil.copyfile(bb_filename,'%s/%s' % (hostout.name,bb_filename))
-        dockerfile.add_file(bb_filename, '/var/buildout/%s/' % hostout.name, bb_filename   )
-        dockerfile.run_all('./bin/buildout -Nc basebuildout_%s.cfg' % hostout.name)
-
     buildout_filename = "hostout-gen-%s.cfg" % hostout.name
     _buildoutdockerfile(dockerfile, 'buildout_bundle.tar', buildout_filename)
+
+    # To help with caching we will run install each buildout part as a seperate command
+    # Just use parts = with multiple parts
+    # TODO turn off with command line switch
+    for i in range(1, len(hostout.parts)):
+        baseparts = ' '.join(hostout.parts[0:i])
+        dockerfile.run_all('./bin/buildout -Nc %s install %s' % (buildout_filename, baseparts))
+
     dockerfile.run_all('./bin/buildout -Nc %s' % (buildout_filename))
     _startupdockerfile(dockerfile, buildout_filename)
     dockerfile.finalize()
