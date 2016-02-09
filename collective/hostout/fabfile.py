@@ -1295,11 +1295,13 @@ def dockerfile(path=None):
 
     # If a basebuildout file exists, run it as an additional step to allow
     # common eggs to be cached.
-    bb_filename = 'basebuildout_%s.cfg' % hostout.name
-    if os.path.isfile(bb_filename):
-        shutil.copyfile(bb_filename,'%s/%s' % (hostout.name,bb_filename))
-        dockerfile.add_file(bb_filename, '/var/buildout/%s/' % hostout.name, bb_filename   )
-        dockerfile.run_all('./bin/buildout -Nc basebuildout_%s.cfg' % hostout.name)
+    bb_file = 'basebuildout_%s.cfg' % hostout.name
+    if os.path.isfile(bb_file):
+        shutil.copyfile(bb_file, '%s/%s' % (path, bb_file))
+        dockerfile.add_file(bb_file, '/var/buildout/%s/'
+                            % hostout.name, bb_file)
+        dockerfile.run_all('./bin/buildout -Nc basebuildout_%s.cfg'
+                           % hostout.name)
 
     buildout_filename = "hostout-gen-%s.cfg" % hostout.name
     _buildoutdockerfile(dockerfile, 'buildout_bundle.tar', buildout_filename)
