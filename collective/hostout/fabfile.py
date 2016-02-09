@@ -1150,10 +1150,30 @@ def _basedockerfile(dockerfile):
     # TODO: need a way to install python on any platform
     # TODO: Need a way to get rid of buildtools after running buildout
     hostimage = api.env.get('hostimage', 'alpine')
+
+
+    hostout = api.env.hostout
+    versions = hostout.getVersions()
+    buildout_version = versions.get('zc.buildout','1.4.3')
+    setuptools_version = versions.get('setuptools','6.0.2')
+    path = api.env.path
+
+
+    params = dict(user=api.env['buildout-user'],
+                  group=api.env['buildout-group'],
+                  effective=api.env['effective-user'],
+                  path=path,
+                  bv=buildout_version,
+                  bf="buildout.cfg",
+                  sv=setuptools_version,
+                  bootstrap_url="https://bootstrap.pypa.io/bootstrap-buildout.py",
+                  bootstrap="bootstrap-buildout.py")
+
+    dockerfile.prefix('USER', 'root')
     if 'python' in hostimage:
         dockerfile.run_all("pip install virtualenvwrapper")
-        dockerfile.run_all('adduser --system --disabled-password --shell /bin/bash '
-                           '--group --home /home/plone --gecos "Plone system user" -u 1000 plone')
+        dockerfile.run_all(('adduser --system --disabled-password --shell /bin/bash '
+                           '--group --home /home/{user} --gecos "{user} system user" -u 1000 {user}').format(**params))
     elif 'ubuntu' in hostimage:
         dockerfile.run_all("rm -rf /var/lib/apt/lists/* &&"
                            "apt-get update &&"
@@ -1164,21 +1184,16 @@ def _basedockerfile(dockerfile):
                            "apt-get install -y -q --fix-missing python-dev python-pip libssl-dev && "
                            "pip install virtualenvwrapper")
         dockerfile.run_all('adduser --system --disabled-password --shell /bin/bash '
-                           '--group --home /home/plone --gecos "Plone system user" -u 1000 plone')
+                           '--group --home /home/{user} --gecos "{user} system user" -u 1000 {user}'.format(**params))
     elif 'alpine' in hostimage:
         dockerfile.run_all("apk --no-cache add python python-dev build-base py-pip ca-certificates && "
                            "update-ca-certificates && "
                            "pip install virtualenvwrapper")
-        dockerfile.run_all('addgroup -g 1000 plone && adduser -S -D -s /bin/bash -G plone -h /home/plone -g "Plone system user" -u 1000 plone')
+        dockerfile.run_all('addgroup -g 1000 {group} && adduser -S -D -s /bin/bash -G {group} '
+                           ' -h /home/{user} -g "{user} system user" -u 1000 {user}'.format(**params))
+    else:
+        dockerfile.run_all("pip install virtualenvwrapper")
 
-
-    hostout = api.env.hostout
-    versions = hostout.getVersions()
-    buildout_version = versions.get('zc.buildout','1.4.3')
-    setuptools_version = versions.get('setuptools','6.0.2')
-    path = api.env.path
-    buildout = api.env['buildout-user']
-    buildoutgroup = api.env['buildout-group']
 
     #upload the eggs
     dl = hostout.getDownloadCache()
@@ -1187,34 +1202,35 @@ def _basedockerfile(dockerfile):
     cmds += ['mkdir -p %s %s %s' % (os.path.join(buildoutcache, "eggs"),
                                               os.path.join(dl, "dist"),
                                               os.path.join(dl, "extends"))]
-    cmds += ['chown -R plone:plone %s' % buildoutcache]
-    cmds += ['mkdir -p %s' % (path)]
-    cmds += ["mkdir -p %s/var/tmp" % path]
+    cmds += ['chown -R {user}:{group} {path}'.format(**params)]
+    cmds += ['mkdir -p {path}'.format(**params)]
     dockerfile.run_all(' && '.join(cmds))
 
+    dockerfile.run_all(' && '.join(hostout.getPreCommands()))
+#    bootstrap = resource_filename(__name__, 'bootstrap.py')
+#    dockerfile.add_file(bootstrap, 'bootstrap.py')
+    dockerfile.prefix('USER', params['user'])
+    cmds = []
+    cmds += ['cd {path} && test ! -e "bin/buildout"'.format(**params)]
+    cmds += ['chown -R {user}.{group} . && chmod -R a+rwx .'.format(**params)]
+    cmds += ["""(python -c "import urllib; urllib.urlretrieve("{bootstrap_url}", "{bootstrap}")" ) """.format(**params)]
+    cmds += ['virtualenv . ']
+    cmds += ['mkdir -p {path}/var/tmp '.format(**params)]
+    cmds += ['bin/pip install setuptools=={sv} && '
+             'echo "[buildout]" > buildout.cfg && '
+#            'echo "[buildout]\n[versions]\nzc.buildout = %s" > buildout.cfg' % buildout_version)
+             'bin/python bootstrap-buildout.py --buildout-version={bv} '
+             '-c buildout.cfg --setuptools-version={sv} '
+             '|| echo "Buildout exists"'.format(**params)]
+    dockerfile.run_all(' && '.join(cmds))
     dockerfile.prefix('ENV', 'TMPDIR %s/var/tmp' % path)
     dockerfile.prefix('WORKDIR', path)
-    dockerfile.run_all(' && '.join(hostout.getPreCommands()))
-    bootstrap = resource_filename(__name__, 'bootstrap.py')
-#    dockerfile.add_file(bootstrap, 'bootstrap.py')
-    cmds = ["""python -c "import urllib; urllib.urlretrieve('%s', '%s')" """ %
-                       ("https://bootstrap.pypa.io/bootstrap-buildout.py","bootstrap-buildout.py")]
-    cmds += ['chown -R plone.plone . && chmod -R a+rwx .']
-    cmds += ['cd %(path)s && virtualenv . && '
-                      'bin/pip install setuptools==%(sv)s && '
-                       'echo "[buildout]" > buildout.cfg && '
-#                       'echo "[buildout]\n[versions]\nzc.buildout = %s" > buildout.cfg' % buildout_version)
-                       'bin/python bootstrap-buildout.py --buildout-version=%(bv)s -c %(bf)s --setuptools-version=%(sv)s'
-                            % dict(path=path, bv=buildout_version, bf="buildout.cfg", sv=setuptools_version)]
-    dockerfile.run_all(' && '.join(cmds))
 
     #HACK
     #dockerfile.run_all('apt-get install python-docutils')
     dockerfile.prefix('USER', 'root')
-    dockerfile.run_all('chown -R plone.plone %s . && chmod -R a+rwx .' % buildoutcache)
-
-#    dockerfile.expose = "22 80 8101"
-    dockerfile.prefix('USER', 'plone')
+    dockerfile.run_all('chown -R {user}.{group} {path} . && chmod -R a+rwx .'.format(**params))
+    dockerfile.prefix('USER', params['effective'])
 
 
 def _buildoutdockerfile(dockerfile, bundle_file, buildout_filename):
@@ -1223,7 +1239,7 @@ def _buildoutdockerfile(dockerfile, bundle_file, buildout_filename):
 
     def reset(tarinfo):
         tarinfo.uid = tarinfo.gid = 0
-        tarinfo.uname = tarinfo.gname = "plone"
+        tarinfo.uname = tarinfo.gname = api.env['buildout-group']
         return tarinfo
 
     bundle = tarfile.open(bundle_file, 'w:')
@@ -1265,12 +1281,18 @@ def _buildoutdockerfile(dockerfile, bundle_file, buildout_filename):
 def _startupdockerfile(dockerfile, buildout_filename):
     hostout = api.env.hostout
     path = api.env.path
+
+    params = dict(user=api.env['buildout-user'],
+                  group=api.env['buildout-group'],
+                  effective=api.env['effective-user'],
+                  path=path)
+
     dockerfile.prefix('WORKDIR', path)
 #    dockerfile.expose = "22 80 8101"
-    dockerfile.prefix('USER', 'plone')
+    dockerfile.prefix('USER', params['user'])
     # on run we do one quick offline build so we can include env vars
     commands = ['cd %s' % path,
-                'chown -R plone:plone var',
+                'chown -R {user}:{group} var'.format(**params),
                 'chmod -R a+rwx var',
                 './bin/buildout -NOc %s' % buildout_filename,
     ]
@@ -1328,6 +1350,10 @@ def dockerbuild():
     path = api.env.path
     client = myclient(**kwargs_from_env(assert_hostname=False))
     hostimage = api.env.get('hostimage', 'alpine')
+    params = dict(user=api.env['buildout-user'],
+                  group=api.env['buildout-group'],
+                  effective=api.env['effective-user'],
+                  path=path)
 
     dockerfile = DockerFile(hostimage, maintainer='ME, me@example.com')
     _basedockerfile(dockerfile)
@@ -1374,9 +1400,8 @@ def dockerbuild():
     print "mapping local folders: %s" % volumes
 
     container = client.create_container(image,
-                                        user='plone',
                                         working_dir=path,
-                                        command='./bin/buildout -Nc %s' % (buildout_filename),
+                                        entrypoint='./bin/buildout -Nc %s' % (buildout_filename),
                                         volumes=[volumes]
                                         )
 
