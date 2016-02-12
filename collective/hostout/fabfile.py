@@ -1236,6 +1236,7 @@ def _basedockerfile(dockerfile):
 def _buildoutdockerfile(dockerfile, bundle_file, buildout_filename):
     hostout = api.env.hostout
     path = api.env.path
+    dl = hostout.getDownloadCache()
 
     def reset(tarinfo):
         tarinfo.uid = tarinfo.gid = 0
@@ -1246,7 +1247,7 @@ def _buildoutdockerfile(dockerfile, bundle_file, buildout_filename):
     for pkg in hostout.localEggs():
         name = os.path.basename(pkg)
         #dockerfile.add_file(pkg, os.path.join(dl, 'dist', name))
-        bundle.add(pkg, os.path.join(path, 'dist', name), filter=reset)
+        bundle.add(pkg, os.path.join(dl, 'dist', name), filter=reset)
 
     # move our buildout files over
     for fileabs, filerel in hostout.getHostoutPackageFiles():
@@ -1254,7 +1255,7 @@ def _buildoutdockerfile(dockerfile, bundle_file, buildout_filename):
 
     # Now upload pinned.cfg.
     pinned = "[buildout]\ndevelop=\nauto-checkout=\n" + \
-        "find-links += "+ os.path.join(path, 'dist') + '\n' \
+        "find-links += "+ os.path.join(dl, 'dist') + '\n' \
         "[versions]\n"+hostout.packages.developVersions()
     pinnedtmp = open('parts/pinned.cfg',"w")
     pinnedtmp.write(pinned)
@@ -1292,13 +1293,15 @@ def _startupdockerfile(dockerfile, buildout_filename):
     dockerfile.prefix('USER', params['user'])
     # on run we do one quick offline build so we can include env vars
     commands = ['cd %s' % path,
-                'chown -R {user}:{group} var'.format(**params),
-                'chmod -R a+rwx var',
+#                'chown -R {user}:{group} var'.format(**params),
+#                'chmod -R a+rwx var',
                 './bin/buildout -NOc %s' % buildout_filename,
     ]
     commands += hostout.getPostCommands()
     command = ' && '.join(commands)
-    dockerfile.command=['/bin/sh', '-c', '%s' % (command)]
+    dockerfile.entrypoint = '/bin/sh -c'
+    dockerfile.command=['%s' % (command)]
+    #TODO remove any entry point
 
 def dockerfile(path=None):
     hostout = api.env.hostout
@@ -1395,14 +1398,13 @@ def dockerbuild():
 
     # We run our build outside of dockerfile so we can resume the build if it fails
     volumes = "%s:%s" % (hostout.packages.download_cache, hostout.getDownloadCache())
-    print "mapping local folders: %s" % volumes
+#    print "mapping local folders: %s" % volumes
 
     container = client.create_container(image,
                                         working_dir=path,
                                         entrypoint='./bin/buildout -Nc %s' % (buildout_filename),
-                                        volumes=[volumes]
-                                        )
-
+ #                                       volumes=[volumes]
+                                      )
     client.start(container)
     error = 0
     for line in client.logs(container, stderr=True, stream=True):
