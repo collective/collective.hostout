@@ -1174,7 +1174,7 @@ def _basedockerfile(dockerfile):
         dockerfile.run_all("pip install virtualenvwrapper")
         dockerfile.run_all(('adduser --system --disabled-password --shell /bin/bash '
                            '--group --home /home/{user} --gecos "{user} system user" -u 1000 {user}').format(**params))
-    elif 'ubuntu' in hostimage:
+    elif 'ubuntu' in hostimage or 'debian' in hostimage:
         dockerfile.run_all("rm -rf /var/lib/apt/lists/* &&"
                            "apt-get update &&"
                            "apt-get upgrade -y -q &&"
@@ -1199,11 +1199,13 @@ def _basedockerfile(dockerfile):
     dl = hostout.getDownloadCache()
     buildoutcache = api.env['buildout-cache']
     cmds = []
-    cmds += ['mkdir -p %s %s %s' % (os.path.join(buildoutcache, "eggs"),
-                                              os.path.join(dl, "dist"),
-                                              os.path.join(dl, "extends"))]
-    cmds += ['chown -R {user}:{group} {path}'.format(**params)]
+    buildout_dirs = '%s %s %s' % (os.path.join(buildoutcache, "eggs"),
+                                  os.path.join(dl, "dist"),
+                                  os.path.join(dl, "extends"))
+    cmds += ['mkdir -p %s' % buildout_dirs]
+    cmds += ['chown -R {user}:{group} %s'.format(**params) % buildout_dirs]
     cmds += ['mkdir -p {path}'.format(**params)]
+    cmds += ['chown -R {user}:{group} {path}'.format(**params)]
     dockerfile.run_all(' && '.join(cmds))
 
     dockerfile.run_all(' && '.join(hostout.getPreCommands()))
@@ -1213,7 +1215,7 @@ def _basedockerfile(dockerfile):
     cmds = []
     cmds += ['cd {path} && test ! -e "bin/buildout"'.format(**params)]
     cmds += ['chown -R {user}.{group} . && chmod -R a+rwx .'.format(**params)]
-    cmds += ["""(python -c "import urllib; urllib.urlretrieve("{bootstrap_url}", "{bootstrap}")" ) """.format(**params)]
+    cmds += ["""(python -c 'import urllib; urllib.urlretrieve("{bootstrap_url}", "{bootstrap}")' ) """.format(**params)]
     cmds += ['virtualenv . ']
     cmds += ['mkdir -p {path}/var/tmp '.format(**params)]
     cmds += ['bin/pip install setuptools=={sv} && '
