@@ -609,9 +609,18 @@ class Packages:
                 except:
                     import pdb; pdb.set_trace()
                 hash = hash.lstrip('-').replace('_','-').replace('_','-').replace('--','-')
-                tag = '.dev'+hash if '.dev' not in version else hash
+                if version.endswith('.dev0'):
+                    tag = "."+hash
+                elif version.endswith(".dev"):
+                    tag = "0."+hash
+                elif ".dev" in version:
+                    tag = "."+hash
+                else:
+                    tag = hash
+                #tag = '.dev0.'+hash if '.dev' not in version else "."+hash
                 # mimick setuptools which strips the 0.
-                fullname = re.sub(r"(.*).dev0$", r"\1.dev", fullname)+tag+'.zip'
+                #fullname = re.sub(r"(.*).dev0$", r"\1.dev", fullname)+tag+'.zip'
+                fullname = fullname+tag+'.zip'
                 if fullname in cur_dists:
                     print "Hostout: '%s' unchanged hash=%s(%s). " % (path, hash, hash_debug)
                     self.local_eggs[name] = (name, version+tag, os.path.join(self.dist_dir,fullname))

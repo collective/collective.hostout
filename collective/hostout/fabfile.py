@@ -403,7 +403,7 @@ def bootstrap_users():
     buildoutgroup = api.env['buildout-group']
     owner = buildout
 
-    from fabric.exceptions import NetworkError
+#    from fabric.exceptions import NetworkError
 
 
     try:
@@ -418,8 +418,8 @@ def bootstrap_users():
             api.sudo('egrep ^%(effective)s: /etc/passwd || useradd %(addopt)s %(effective)s || useradd %(addopt_noM)s %(effective)s' % dict(effective=effective, addopt=addopt, addopt_noM=addopt_noM))
             api.sudo('gpasswd -a %(owner)s %(buildoutgroup)s' % dict(owner=owner, buildoutgroup=buildoutgroup))
             api.sudo('gpasswd -a %(effective)s %(buildoutgroup)s' % dict(effective=effective, buildoutgroup=buildoutgroup))
-        except NetworkError:
-            raise
+        # except NetworkError:
+        #     raise
         except:
             raise Exception (("Was not able to create users and groups." +
                     "Please set these group manualy." +
@@ -535,11 +535,14 @@ def bootstrap_buildout():
                 # get virtualenv first
                 elif not contrib.files.exists("%spip" % pythonbin):
                     with cd("/tmp"):
-                        get_url("https://github.com/pypa/virtualenv/tarball/develop", output="virtualenv.tar.gz")
-                        api.run("tar xvfz virtualenv.tar.gz")
-                        setup = api.run("find pypa-virtualenv* -name virtualenv.py ")
-                    api.run("%s /tmp/%s %s" % (python, setup, path))
-                    api.run("rm -r /tmp/pypa-virtualenv*")
+                        #get_url("https://github.com/pypa/virtualenv/tarball/develop", output="virtualenv.tar.gz")
+                        #api.run("tar xvfz virtualenv.tar.gz")
+                        get_url("https://raw.githubusercontent.com/pypa/virtualenv/master/virtualenv.py", output="virtualenv.py")
+
+                        #setup = api.run("find pypa-virtualenv* -name virtualenv.py ")
+                        setup = "virtualenv.py"
+                    api.run("%s /tmp/%s %s --no-setuptools --no-pip --no-wheel" % (python, setup, path))
+                    #api.run("rm -r /tmp/pypa-virtualenv*")
                 else:
                     api.run("%spip install virtualenv" % pythonbin)
                     #api.run("%s %s --no-setuptools %s" % (python, setup, path))
@@ -1425,3 +1428,25 @@ def dockerbuild():
     _startupdockerfile(dockerfile, buildout_filename)
     image = client.build_from_file(dockerfile, tag="hostout/%s:latest" % hostout.name, rm=True)
     print "Final image created %s" % image
+
+def hotfix(url,dest='products'):
+    """ Takes a url and will deploy that to your products directory. Don't forget to restart after """
+    with api.cd('%s/%s'%(api.env.path, dest)):
+        with asbuildoutuser():
+            #api.run("curl %s /tmp/hotfix.zip"%url)
+            #api.run("python -c \"import urllib; f=open('/tmp/hotfix.zip','w'); f.write(urllib.urlopen('%s').read()); f.close()\""%url)
+            filename = os.path.basename(url)
+            tmp = '/tmp/%s'%filename
+            if not os.path.exists(tmp):
+                f=open(tmp,'w')
+                f.write(urllib.urlopen(url).read())
+                f.close()
+            api.put(tmp, tmp)
+            try:
+                api.run("unzip -o %s"%tmp)
+            except:
+                api.run("""python -c "import zipfile;import urllib;import StringIO; zipfile.ZipFile(StringIO.StringIO(urllib.urlopen('%s').read())).extractall()" """%url)
+
+            group = api.env['buildout-group']
+            api.run("chgrp -R %s ."%(group))
+            api.run('rm %s'%tmp)
