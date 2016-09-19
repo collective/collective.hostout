@@ -1199,7 +1199,8 @@ def _basedockerfile(dockerfile):
     dl = hostout.getDownloadCache()
     buildoutcache = api.env['buildout-cache']
     cmds = []
-    buildout_dirs = '%s %s %s' % (os.path.join(buildoutcache, "eggs"),
+    buildout_dirs = '%s %s %s %s' % (os.path.join(buildoutcache),
+                                  os.path.join(buildoutcache, "eggs"),
                                   os.path.join(dl, "dist"),
                                   os.path.join(dl, "extends"))
     cmds += ['mkdir -p %s' % buildout_dirs]
