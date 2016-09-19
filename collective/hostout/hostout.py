@@ -125,7 +125,7 @@ class DistributionGenerationException(Exception):
         self.path = path
         self.args = args
         self.dircontents = dircontents
-        
+
     def __str__(self):
         return  "Error releasing egg at %s: No egg found after \n python setup.py %s %s" % (self.path, self.args, self.dircontents)
 
@@ -148,7 +148,7 @@ class HostOut:
         except:
             self.host = opt.get('host')
             self.port = 22
-            
+
         self.user = opt.get('user')
         self.password = opt.get('password')
 
@@ -171,7 +171,7 @@ class HostOut:
             opt['buildout-cache'] = self.buildout_cache
 
 
-        self.fabfiles = [p.strip() for p in opt.get('fabfiles','').split() if p.strip()] 
+        self.fabfiles = [p.strip() for p in opt.get('fabfiles','').split() if p.strip()]
 
         #self.packages = opt['packages']
         #dist_dir = os.path.abspath(os.path.join(self.buildout_location,self.dist_dir))
@@ -263,7 +263,7 @@ class HostOut:
         res = StringIO.StringIO()
         config.write(res)
         genconfig = res.getvalue()
-        
+
         if self.options['versionsfile']:
             versions = open(self.options['versionsfile']).read()
             self.parseVersions(versions)
@@ -277,7 +277,7 @@ class HostOut:
                         break
                 if not found:
                     genconfig += line+'\n'
-        
+
         return genconfig
 
     def parseVersions(self, versions):
@@ -298,7 +298,7 @@ class HostOut:
         "determine all the buildout files that make up this configuration and package them"
 
         #self.config_file = os.path.join(base,'%s.cfg'%self.name)
-        
+
         #config_file = os.path.abspath(os.path.join(self.packages.buildout_location,self.config_file))
         #if not os.path.exists(config_file):
         #    raise Exception("Invalid config file")
@@ -308,7 +308,7 @@ class HostOut:
         for file in self.buildout_cfg:
             files = files.union( set(get_all_extends(file)))
         files = files.union( set(self.getBuildoutDependencies()))
-        
+
         filesAbsolute = [os.path.abspath(f) for f in files]
         filesRelative = [os.path.relpath(f, self.buildout_dir) for f in filesAbsolute]
         filesAbsRel = zip (filesAbsolute, filesRelative)
@@ -325,7 +325,7 @@ class HostOut:
         filesAbsRel = self.getHostoutPackageFiles()
         dist_dir = self.packages.dist_dir
 
-        
+
         name = '%s/%s_%s.tgz'%(dist_dir,'deploy', self.releaseid)
         self.hostout_package = name
         #if os.path.exists(name):
@@ -335,7 +335,7 @@ class HostOut:
 
         for fileAbs, fileRel in filesAbsRel:
             self.tar.add(fileAbs,arcname=fileRel)
-            
+
         self.tar.close()
         return self.hostout_package
 
@@ -357,7 +357,7 @@ class HostOut:
         " Create a tunnel back to the dev server and start a socks proxy, returning the remote connection string "
         if not self.options.get("tunnel",False):
             return ''
-        
+
         from fabric.state import connections
         transport = connections[api.env.host_string].get_transport()
         if getattr(self,'socks_server',None) is None:
@@ -404,7 +404,7 @@ class HostOut:
             return self._allcmds
         fabfiles = [(cmds,fabfile) for cmds,fabfile,pkg in findfabfiles() if pkg in self.extends]
         self.sets.extend( fabfiles)
-        
+
         for fabfile in self.fabfiles:
 
             #fabric._load_default_settings()
@@ -433,8 +433,8 @@ class HostOut:
     def runcommand(self, cmd, *cmdargs, **vargs):
         self.allcmds()
         api.env['hostout'] = self
-        
-        
+
+
 
         if self.firstrun:
             self.resetenv()
@@ -454,7 +454,7 @@ class HostOut:
             if len(funcs) == 0:
                 return None
             func,fabfile = funcs[0]
-            
+
             api.env['superfun'] = functools.partial(superfun, funcs[1:])
 
             print "Hostout: Running command '%(cmd)s' from '%(fabfile)s'" % dict(cmd=cmd,
@@ -470,17 +470,17 @@ class HostOut:
             else:
                 api.env['host'] = None
                 api.env['host_string'] = None
-                
+
             api.env.cwd = ''
             output.debug = True
             res = func(*cmdargs, **vargs)
-           
+
             return res
-        
+
         callingsuper = api.env.get('superfun',None)
         res = superfun(funcs, *cmdargs, **vargs)
         api.env['superfun'] = callingsuper
-        
+
         return res
 
     def __getattr__(self, name):
@@ -502,7 +502,7 @@ class Packages:
     """ responsible for packaging the development eggs ready to be released to each host"""
 
     def __init__(self, buildout):
-        
+
         self.packages = [p for p in buildout.get('packages','').split()]
 
         self.buildout_location = buildout.get('location','')
@@ -518,15 +518,15 @@ class Packages:
 
     def getDistEggs(self):
         files = os.listdir(self.dist_dir)
-        
+
         eggs = []
         for file in files:
             eggs += pkg_resources.find_distributions(os.path.join(self.dist_dir, file) )
         return dict([(( egg.project_name,egg.version),egg) for egg in eggs])
         #eggs = pkg_resources.Environment(self.dist_dir)
         #return dict([(( egg.project_name,egg.version),egg) for egg in eggs])
-        
-        
+
+
     def getPackages(self):
         res = {}
         for path in self.packages:
@@ -553,7 +553,7 @@ class Packages:
         #python setup.py sdist bdist_egg
  #       tmpdir = tempfile.mkdtemp()
         localdist_dir = tempfile.mkdtemp()
-        
+
         #eggs = self.getDistEggs()
         from setuptools.package_index import interpret_distro_name
         cur_dists = list(os.listdir(self.dist_dir))
@@ -561,7 +561,7 @@ class Packages:
         #    #path = os.path.join(self.dist_dir, path)
         #    for dist in interpret_distro_name(self.dist_dir, path, None):
         #            pass
-                
+
             #egg = pkg_resources.find_distributions(path, only=False)
 
         ids = {}
@@ -615,6 +615,9 @@ class Packages:
                     tag = "0."+hash
                 elif ".dev" in version:
                     tag = "."+hash
+                elif version.endswith(".0"):
+                    tag = hash
+                    fullname = re.sub(r".0$", r".", fullname)
                 else:
                     tag = hash
                 #tag = '.dev0.'+hash if '.dev' not in version else "."+hash
@@ -653,7 +656,7 @@ class Packages:
                 if os.path.exists(loc):
                     os.remove(loc)
                 shutil.move(os.path.join(localdist_dir, pkg), self.dist_dir)
-                
+
                 self.local_eggs[name] = (name, version+tag, loc)
                 #released[dist.project_name] = dist.version
             else:
@@ -665,7 +668,7 @@ class Packages:
 
             #eggs = self.getDistEggs()
             for (name,version) in released.items():
-                
+
                 req  = pkg_resources.Requirement.parse("%(name)s==%(version)s"%locals())
                 env.prescan()
                 egg = env.find_packages(req)
@@ -735,7 +738,7 @@ def main(cfgfile, args):
     parser = OptionParser()
     parser.add_option("-c", "--configuration", dest="cfgfile", default=cfgfile,
                       help="hostout configuration file", metavar="FILE")
-    
+
     (options, args) = parser.parse_args()
     cfgfile = options.cfgfile.strip()
 
@@ -746,8 +749,8 @@ def main(cfgfile, args):
 #    buildout = Buildout(config.get('buildout','buildout'),[])
     packages = Packages(dict(config.items('buildout')))
     #eggs = packages.release_eggs()
-    # 
-        
+    #
+
     for section in [s for s in config.sections() if s not in ['buildout', 'versions']]:
         options = dict(config.items(section))
 
@@ -767,7 +770,7 @@ def main(cfgfile, args):
             elif arg == 'all':
                 hosts = allhosts.items()
             else:
-                pos = 'cmds'            
+                pos = 'cmds'
                 # get all cmds
                 allcmds = {'deploy':None}
                 for host,hostout in hosts:
@@ -843,7 +846,7 @@ def is_task(tup):
 #
 def findfabfiles():
     from pkg_resources import iter_entry_points
-    
+
     fabfiles = []
     for ep in iter_entry_points(
         group='fabric',
@@ -859,38 +862,38 @@ def findfabfiles():
     return fabfiles
 
 
-# Fabric load_fabfile uses __import__ which doesn't always load from path    
+# Fabric load_fabfile uses __import__ which doesn't always load from path
 import imp
 def load_fabfile(filename, **kwargs):
     """
     Load up the given fabfile.
-    
+
     This loads the fabfile specified by the `filename` parameter into fabric
-    and makes its commands and other functions available in the scope of the 
+    and makes its commands and other functions available in the scope of the
     current fabfile.
-    
+
     If the file has already been loaded it will not be loaded again.
-    
+
     May take an additional `fail` keyword argument with one of these values:
-    
+
      * ignore - do nothing on failure
      * warn - print warning on failure
      * abort - terminate fabric on failure
-    
+
     Example:
-    
+
         load("conf/production-settings.py")
-    
+
     """
     if not os.path.exists(filename):
-        raise Exception("Load failed:\n" 
+        raise Exception("Load failed:\n"
             "File not found: " + filename)
         return
-    
+
     #if filename in _LOADED_FABFILES:
     #    return
     #_LOADED_FABFILES.add(filename)
-    
+
     #execfile(filename, _new_namespace(), captured)
     imported = imp.load_source(filename.replace('/','.'), filename)
     return dict(filter(is_task, vars(imported).items()))
@@ -948,7 +951,7 @@ def find_sources(path):
         mm.manifest = None
         mm.run()
         return mm.filelist
-    
+
 
 def find_distributions(path):
         #HACK: need to parse setup.py instead assuming src
@@ -965,10 +968,10 @@ def getVersion(path):
 
 
 def asbuildoutuser():
-    
+
     kwargs = {"user": api.env.hostout.options['buildout-user']}
-    
-    
+
+
     # Select Authentication method
     password = api.env.hostout.options.get("buildout-password")
     if password:
@@ -1018,8 +1021,8 @@ class buildoutuser(object):
         api.env.user = api.env.hostout.options['buildout-user']
         key_filename = api.env.key_filename
         password = getattr(api.env, "password")
-        
-        
+
+
         buildoutpass = api.env.hostout.options.get("buildout-password")
         passSet = False
         if buildoutpass:
@@ -1030,8 +1033,8 @@ class buildoutuser(object):
             ifile = api.env.get('identity-file')
             if ifile and os.path.exists(ifile):
                 api.env.key_filename = ifile
-        
-        
+
+
         #this will reset the connection
         api.env['host_string']="%(user)s@%(host)s:%(port)s"%api.env
         self.f(*args, **vargs)
@@ -1097,7 +1100,3 @@ if SocksServer is not None:
 class HTTPProxy(TunneledServer, SocketServer.ThreadingTCPServer, BaseHTTPServer.HTTPServer):
     def __init__(self, transport, listen_addr):
         TunneledServer.__init__(self, transport, listen_addr, HTTPProxyHandler)
-
-
-
-
