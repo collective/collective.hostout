@@ -1327,6 +1327,13 @@ def dockerfile(path=None):
     buildout_filename = "hostout-gen-%s.cfg" % hostout.name
     _buildoutdockerfile(dockerfile, 'buildout_bundle.tar', buildout_filename)
 
+    # Make sure user has ownership of all files
+    dockerfile.prefix('USER', 'root')
+    dockerfile.run_all('chown -R %s.%s %s' % (api.env['buildout-user'],
+                                              api.env['buildout-group'],
+                                              api.env.path))
+    dockerfile.prefix('USER', api.env['effective-user'])
+
     # To help with caching we will run install each buildout part as a seperate command
     # Just use parts = with multiple parts
     # TODO turn off with command line switch
