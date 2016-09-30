@@ -1146,7 +1146,7 @@ try:
             print info
 
 except:
-    pass
+    from dockermap.build.dockerfile import DockerFile
 
 
 def _basedockerfile(dockerfile):
