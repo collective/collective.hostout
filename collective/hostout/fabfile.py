@@ -1194,6 +1194,8 @@ def _basedockerfile(dockerfile):
                            "pip install virtualenvwrapper")
         dockerfile.run_all('addgroup -g 1000 {group} && adduser -S -D -s /bin/bash -G {group} '
                            ' -h /home/{user} -g "{user} system user" -u 1000 {user}'.format(**params))
+    elif hostimage.startswith('hostout_baseimage'):
+        pass
     else:
         dockerfile.run_all("pip install virtualenvwrapper")
 
