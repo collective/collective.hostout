@@ -1203,16 +1203,16 @@ def _basedockerfile(dockerfile):
     #upload the eggs
     dl = hostout.getDownloadCache()
     buildoutcache = api.env['buildout-cache']
-    cmds = []
-    buildout_dirs = '%s %s %s %s' % (os.path.join(buildoutcache),
-                                  os.path.join(buildoutcache, "eggs"),
-                                  os.path.join(dl, "dist"),
-                                  os.path.join(dl, "extends"))
-    cmds += ['mkdir -p %s' % buildout_dirs]
-    cmds += ['chown -R {user}:{group} %s'.format(**params) % buildout_dirs]
-    cmds += ['mkdir -p {path}'.format(**params)]
-    cmds += ['chown -R {user}:{group} {path}'.format(**params)]
-    dockerfile.run_all(' && '.join(cmds))
+
+    buildout_dirs = [os.path.join(buildoutcache, "eggs"),
+                     os.path.join(dl, "dist"),
+                     os.path.join(dl, "extends")]
+    for buildout_dir in buildout_dirs:
+        cmds = []
+        cmds += ['mkdir -p %s' % buildout_dir]
+        cmds += ['chown {user}:{group} %s'.format(**params) % buildout_dir]
+        dockerfile.run_all('test -d %s || (%s)' % (buildout_dir,
+                                                   ' && '.join(cmds)))
 
     dockerfile.run_all(' && '.join(hostout.getPreCommands()))
 #    bootstrap = resource_filename(__name__, 'bootstrap.py')
@@ -1236,8 +1236,8 @@ def _basedockerfile(dockerfile):
 
     #HACK
     #dockerfile.run_all('apt-get install python-docutils')
-    dockerfile.prefix('USER', 'root')
-    dockerfile.run_all('chown -R {user}.{group} {path} . && chmod -R a+rwx .'.format(**params))
+    #dockerfile.prefix('USER', 'root')
+    #dockerfile.run_all('chown -R {user}.{group} {path} . && chmod -R a+rwx .'.format(**params))
     dockerfile.prefix('USER', params['effective'])
 
 
@@ -1330,10 +1330,10 @@ def dockerfile(path=None):
     _buildoutdockerfile(dockerfile, 'buildout_bundle.tar', buildout_filename)
 
     # Make sure user has ownership of all files
-    dockerfile.prefix('USER', 'root')
-    dockerfile.run_all('chown -R %s.%s %s' % (api.env['buildout-user'],
-                                              api.env['buildout-group'],
-                                              api.env.path))
+    #dockerfile.prefix('USER', 'root')
+    #dockerfile.run_all('chown -R %s.%s %s' % (api.env['buildout-user'],
+    #                                          api.env['buildout-group'],
+    #                                          api.env.path))
     dockerfile.prefix('USER', api.env['effective-user'])
 
     # To help with caching we will run install each buildout part as a seperate command
