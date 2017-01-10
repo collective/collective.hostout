@@ -1236,8 +1236,8 @@ def _basedockerfile(dockerfile):
 
     #HACK
     #dockerfile.run_all('apt-get install python-docutils')
-    #dockerfile.prefix('USER', 'root')
-    #dockerfile.run_all('chown -R {user}.{group} {path} . && chmod -R a+rwx .'.format(**params))
+    dockerfile.prefix('USER', 'root')
+    dockerfile.run_all('chown -R {user}.{group} {path}/var'.format(**params))
     dockerfile.prefix('USER', params['effective'])
 
 
