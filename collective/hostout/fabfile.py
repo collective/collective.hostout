@@ -1232,6 +1232,7 @@ def _basedockerfile(dockerfile):
              '|| echo "Buildout exists"'.format(**params)]
     dockerfile.run_all(' && '.join(cmds))
     dockerfile.prefix('ENV', 'TMPDIR %s/var/tmp' % path)
+    dockerfile.prefix('ENV', 'SERVICE_TAGS ""')
     dockerfile.prefix('WORKDIR', path)
 
     #HACK
