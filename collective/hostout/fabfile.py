@@ -1210,7 +1210,7 @@ def _basedockerfile(dockerfile):
     for buildout_dir in buildout_dirs:
         cmds = []
         cmds += ['mkdir -p %s' % buildout_dir]
-        cmds += ['chown {user}:{group} %s'.format(**params) % buildout_dir]
+#        cmds += ['chown {user}:{group} %s'.format(**params) % buildout_dir]
         dockerfile.run_all('test -d %s || (%s)' % (buildout_dir,
                                                    ' && '.join(cmds)))
 
@@ -1237,9 +1237,9 @@ def _basedockerfile(dockerfile):
 
     #HACK
     #dockerfile.run_all('apt-get install python-docutils')
-    dockerfile.prefix('USER', 'root')
-    dockerfile.run_all('chown -R {user}.{group} {path}/var'.format(**params))
-    dockerfile.prefix('USER', params['effective'])
+    #dockerfile.prefix('USER', 'root')
+    #dockerfile.run_all('chown -R {user}.{group} {path}/var'.format(**params))
+    #dockerfile.prefix('USER', params['effective'])
 
 
 def _buildoutdockerfile(dockerfile, bundle_file, buildout_filename):
@@ -1331,10 +1331,10 @@ def dockerfile(path=None):
     _buildoutdockerfile(dockerfile, 'buildout_bundle.tar', buildout_filename)
 
     # Make sure user has ownership of all files
-    #dockerfile.prefix('USER', 'root')
-    #dockerfile.run_all('chown -R %s.%s %s' % (api.env['buildout-user'],
-    #                                          api.env['buildout-group'],
-    #                                          api.env.path))
+    dockerfile.prefix('USER', 'root')
+    dockerfile.run_all('chown -R %s.%s %s' % (api.env['buildout-user'],
+                                              api.env['buildout-group'],
+                                              api.env.path))
     dockerfile.prefix('USER', api.env['effective-user'])
 
     # To help with caching we will run install each buildout part as a seperate command
