@@ -1217,7 +1217,7 @@ def _basedockerfile(dockerfile):
     dockerfile.run_all(' && '.join(hostout.getPreCommands()))
 #    bootstrap = resource_filename(__name__, 'bootstrap.py')
 #    dockerfile.add_file(bootstrap, 'bootstrap.py')
-    dockerfile.prefix('USER', params['user'])
+    #dockerfile.prefix('USER', params['user'])
     cmds = []
     cmds += ['cd {path} && test ! -e "bin/buildout"'.format(**params)]
     cmds += ['chown -R {user}.{group} . && chmod -R a+rwx .'.format(**params)]
