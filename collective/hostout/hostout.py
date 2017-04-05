@@ -691,7 +691,7 @@ class Packages:
 
         specs = {}
         #have to use lower since eggs are case insensitive
-        specs.update(dict([(p,v) for p,v,e in self.local_eggs.values()]))
+        specs.update(dict([(pkg_resources.safe_name(p),v) for p,v,e in self.local_eggs.values()]))
 
         res = ""
         for name, version in sorted(specs.items()):
