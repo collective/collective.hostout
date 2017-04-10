@@ -610,16 +610,16 @@ class Packages:
                     import pdb; pdb.set_trace()
                 hash = hash.lstrip('-').replace('_','-').replace('_','-').replace('--','-')
                 if version.endswith('.dev0'):
-                    tag = "."+hash
+                    tag = "+"+hash
                 elif version.endswith(".dev"):
-                    tag = "0."+hash
+                    tag = "+"+hash
                 elif ".dev" in version:
-                    tag = "."+hash
+                    tag = "+"+hash
                 elif version.endswith(".0"):
-                    tag = hash
-                    fullname = re.sub(r".0$", r".", fullname)
+                    tag = "+" + hash
+                    #fullname = re.sub(r".0$", r".", fullname)
                 else:
-                    tag = hash
+                    tag = "+"+hash
                 #tag = '.dev0.'+hash if '.dev' not in version else "."+hash
                 # mimick setuptools which strips the 0.
                 #fullname = re.sub(r"(.*).dev0$", r"\1.dev", fullname)+tag+'.zip'
