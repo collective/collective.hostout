@@ -61,6 +61,9 @@ from TinyHTTPProxy import ProxyHandler as ProxyHTTPRequestHandler
 import BaseHTTPServer
 from subprocess import CalledProcessError
 
+import zc.buildout.easy_install
+
+
 #logging.basicConfig(level=logging.DEBUG)
 
 if "check_output" not in dir( subprocess ): # duck punch it in!
@@ -494,9 +497,6 @@ class HostOut:
 
 
 
-import zc.buildout.easy_install
-from zc.buildout.buildout import pkg_resources_loc
-
 
 class Packages:
     """ responsible for packaging the development eggs ready to be released to each host"""
@@ -708,6 +708,7 @@ class Packages:
 
 
         fd, tsetup = tempfile.mkstemp()
+        pkg_resources_loc = pkg_resources.working_set.find(pkg_resources.Requirement.parse('setuptools')).location
         try:
             os.write(fd, zc.buildout.easy_install.runsetup_template % dict(
                 setuptools=pkg_resources_loc,
