@@ -289,6 +289,7 @@ class HostOut:
             if '=' in line:
                 pkg, ver = line.split('=')
                 self.versions[pkg.strip()] = ver.strip()
+        print "Hostout: parse Versions {}".format(self.versions)
         self.options['versions'] = self.versions
 
     def getVersions(self):
@@ -570,8 +571,11 @@ class Packages:
         if self.packages:
             print "Hostout: Preparing eggs for transport"
         cwd = os.getcwd()
+        total = len(self.packages)
+        count = 0
         for path in self.packages:
-
+            count += 1
+            print "Hostout: {}/{} path - {}".format(count, total, path)
             # use buildout to run setup for us
             files = set([])
             path = os.path.abspath(path)
@@ -723,8 +727,12 @@ class Packages:
             args = [zc.buildout.easy_install._safe_arg (sys.executable), '-u',
                     tsetup]+ \
                     [zc.buildout.easy_install._safe_arg(a) for a in args]
+            print "Hostout: subprocess args {}".format(args)
+            print "Hostout: calling subprocess now"
             output = subprocess.check_output(args,stderr=subprocess.STDOUT, close_fds=True)
         except subprocess.CalledProcessError, e:
+            print "Hostout: subprocess returncode {} and error...\n".format(
+                e.returncode) + e.output
             raise
 
         finally:
