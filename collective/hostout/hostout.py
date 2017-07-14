@@ -634,18 +634,20 @@ class Packages:
                     continue
                 else:
                     print "Hostout: '%s' CHANGED. Releasing with hash=%s(%s)" % (path, hash, hash_debug)
-                args=[path,
-                                     'clean',
-                                     'egg_info',
-                                     '--no-svn-revision', '--no-date',
-                                     '--tag-build',
-                                     tag,
-                                     'sdist',
-                                     '--formats=zip', #fix bizzare gztar truncation on windows
-                                     # 'bdist_egg',
-                                     '--dist-dir',
-                                     '%s'%localdist_dir,
-                                      ]
+                args = [
+                    path,
+                    'clean',
+                    'egg_info',
+                    # '--no-svn-revision',  # no longer recognized
+                    '--no-date',
+                    '--tag-build',
+                    tag,
+                    'sdist',
+                    '--formats=zip',  # fix bizzare gztar truncation on windows
+                    # 'bdist_egg',
+                    '--dist-dir',
+                    '%s' % localdist_dir,
+                ]
                 lines = self.setup(args = args)
 
                 #dist = find_distributions(path)
@@ -727,10 +729,9 @@ class Packages:
             args = [zc.buildout.easy_install._safe_arg (sys.executable), '-u',
                     tsetup]+ \
                     [zc.buildout.easy_install._safe_arg(a) for a in args]
-            print "Hostout: subprocess args {}".format(args)
-            print "Hostout: calling subprocess now"
             output = subprocess.check_output(args,stderr=subprocess.STDOUT, close_fds=True)
         except subprocess.CalledProcessError, e:
+            print "Hostout: subprocess args {}".format(args)
             print "Hostout: subprocess returncode {} and error...\n".format(
                 e.returncode) + e.output
             raise
