@@ -1312,6 +1312,62 @@ def _startupdockerfile(dockerfile, buildout_filename):
     dockerfile.command=['%s' % (command)]
     #TODO remove any entry point
 
+
+def buildout_bundle(path=None):
+    hostout = api.env.hostout
+    if path is None:
+        path = hostout.name
+    if not os.path.exists(path):
+        os.makedirs(path)
+    buildout_filename = "hostout-gen-%s.cfg" % hostout.name
+    _buildout_bundle('%s/buildout_bundle.tar' % path, buildout_filename)
+
+def _buildout_bundle(bundle_file, buildout_filename):
+    path = api.env.path
+    hostout = api.env.hostout
+    dl = hostout.getDownloadCache()
+
+    def reset(tarinfo):
+        tarinfo.uid = tarinfo.gid = 0
+        tarinfo.uname = tarinfo.gname = api.env['buildout-group']
+        return tarinfo
+
+    bundle = tarfile.open(bundle_file, 'w:')
+    for pkg in hostout.localEggs():
+        name = os.path.basename(pkg)
+        #dockerfile.add_file(pkg, os.path.join(dl, 'dist', name))
+        bundle.add(pkg, os.path.join(dl, 'dist', name), filter=reset)
+
+    # move our buildout files over
+    for fileabs, filerel in hostout.getHostoutPackageFiles():
+        bundle.add(fileabs, os.path.join(path, filerel), filter=reset )
+
+    # Now upload pinned.cfg.
+    pinned = "[buildout]\ndevelop=\nauto-checkout=\n" + \
+        "find-links += "+ os.path.join(dl, 'dist') + '\n' \
+        "[versions]\n"+hostout.packages.developVersions()
+    pinnedtmp = open('parts/pinned.cfg',"w")
+    pinnedtmp.write(pinned)
+    pinnedtmp.close()
+    bundle.add(pinnedtmp.name, os.path.join(path, 'pinned.cfg'), filter=reset)
+
+
+    #upload generated cfg with hostout versions
+    hostout_file=hostout.getHostoutFile()
+    try:
+        overwrite = open('parts/'+buildout_filename, "r").read() != hostout_file
+    except IOError:
+        overwrite = True
+
+    if overwrite:
+        hostout_tmp = open('parts/'+buildout_filename, "w")
+        hostout_tmp.write(hostout_file)
+        hostout_tmp.close()
+    bundle.add('parts/'+buildout_filename, os.path.join(path, buildout_filename), filter=reset)
+
+    bundle.close()
+
+
 def dockerfile(path=None):
     hostout = api.env.hostout
     if path is None:
