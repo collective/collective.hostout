@@ -1146,7 +1146,10 @@ try:
             print info
 
 except:
-    from dockermap.build.dockerfile import DockerFile
+    try:
+        from dockermap.build.dockerfile import DockerFile
+    except:
+        DockerFile = None
 
 
 def _basedockerfile(dockerfile):
