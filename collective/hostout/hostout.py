@@ -40,6 +40,7 @@ from fabric.state import output
 import time, random
 from collective.hostout import relpath
 import pkg_resources
+from pkg_resources import parse_version, get_distribution
 from setuptools import package_index
 from urllib import pathname2url
 import StringIO
@@ -613,17 +614,21 @@ class Packages:
                 except:
                     import pdb; pdb.set_trace()
                 hash = hash.lstrip('-').replace('_','-').replace('_','-').replace('--','-')
+                setuptools_ver = parse_version(get_distribution("setuptools").version)
+                tag_seperator = '+' if setuptools_ver >= parse_version('34.2.0') else '-'
+                svn_tag = '--no-svn-revision' if setuptools_ver >= parse_version('33.0.0') else ''
+
                 if version.endswith('.dev0'):
-                    tag = "+"+hash
+                    tag = tag_seperator + hash
                 elif version.endswith(".dev"):
-                    tag = "+"+hash
+                    tag = tag_seperator + hash
                 elif ".dev" in version:
-                    tag = "+"+hash
+                    tag = tag_seperator + hash
                 elif version.endswith(".0"):
-                    tag = "+" + hash
+                    tag = tag_seperator + hash
                     #fullname = re.sub(r".0$", r".", fullname)
                 else:
-                    tag = "+"+hash
+                    tag = tag_seperator + hash
                 #tag = '.dev0.'+hash if '.dev' not in version else "."+hash
                 # mimick setuptools which strips the 0.
                 #fullname = re.sub(r"(.*).dev0$", r"\1.dev", fullname)+tag+'.zip'
@@ -648,6 +653,8 @@ class Packages:
                     '--dist-dir',
                     '%s' % localdist_dir,
                 ]
+                if svn_tag:
+                    args += [svn_tag]
                 lines = self.setup(args = args)
 
                 #dist = find_distributions(path)
