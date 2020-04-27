@@ -615,20 +615,19 @@ class Packages:
                     import pdb; pdb.set_trace()
                 hash = hash.lstrip('-').replace('_','-').replace('_','-').replace('--','-')
                 setuptools_ver = parse_version(get_distribution("setuptools").version)
-                tag_seperator = '+' if setuptools_ver >= parse_version('34.2.0') else '-'
                 svn_tag = '--no-svn-revision' if setuptools_ver >= parse_version('33.0.0') else ''
 
                 if version.endswith('.dev0'):
-                    tag = tag_seperator + hash
+                    tag = "+"+hash
                 elif version.endswith(".dev"):
-                    tag = tag_seperator + hash
+                    tag = "+"+hash
                 elif ".dev" in version:
-                    tag = tag_seperator + hash
+                    tag = "+"+hash
                 elif version.endswith(".0"):
-                    tag = tag_seperator + hash
+                    tag = "+"+hash
                     #fullname = re.sub(r".0$", r".", fullname)
                 else:
-                    tag = tag_seperator + hash
+                    tag = "+"+hash
                 #tag = '.dev0.'+hash if '.dev' not in version else "."+hash
                 # mimick setuptools which strips the 0.
                 #fullname = re.sub(r"(.*).dev0$", r"\1.dev", fullname)+tag+'.zip'
@@ -643,7 +642,6 @@ class Packages:
                     path,
                     'clean',
                     'egg_info',
-                    # '--no-svn-revision',  # no longer recognized
                     '--no-date',
                     '--tag-build',
                     tag,
@@ -654,7 +652,7 @@ class Packages:
                     '%s' % localdist_dir,
                 ]
                 if svn_tag:
-                    args += [svn_tag]
+                    args.append(svn_tag)
                 lines = self.setup(args = args)
 
                 #dist = find_distributions(path)
