@@ -615,7 +615,7 @@ class Packages:
                     import pdb; pdb.set_trace()
                 hash = hash.lstrip('-').replace('_','-').replace('_','-').replace('--','-')
                 setuptools_ver = parse_version(get_distribution("setuptools").version)
-                svn_tag = '--no-svn-revision' if setuptools_ver >= parse_version('33.0.0') else ''
+                svn_tag = '--no-svn-revision' if setuptools_ver <= parse_version('33.0.0') else ''
 
                 if version.endswith('.dev0'):
                     tag = "+"+hash
