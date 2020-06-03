@@ -644,7 +644,10 @@ class Packages:
                     'clean',
                     'egg_info',
                     '--no-date',
-                    svn_tag,
+                ]
+                if svn_tag:
+                    args.append(svn_tag)
+                args+=[
                     '--tag-build',
                     tag,
                     'sdist',
