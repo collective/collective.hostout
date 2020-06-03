@@ -644,6 +644,7 @@ class Packages:
                     'clean',
                     'egg_info',
                     '--no-date',
+                    svn_tag,
                     '--tag-build',
                     tag,
                     'sdist',
@@ -652,8 +653,6 @@ class Packages:
                     '--dist-dir',
                     '%s' % localdist_dir,
                 ]
-                if svn_tag:
-                    args.append(svn_tag)
                 lines = self.setup(args = args)
 
                 #dist = find_distributions(path)
