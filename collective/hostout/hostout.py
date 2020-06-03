@@ -632,7 +632,8 @@ class Packages:
                 # mimick setuptools which strips the 0.
                 #fullname = re.sub(r"(.*).dev0$", r"\1.dev", fullname)+tag+'.zip'
                 fullname = fullname+tag+'.zip'
-                if fullname in cur_dists:
+                rebuild = False
+                if fullname in cur_dists and rebuild is False:
                     print "Hostout: '%s' unchanged hash=%s(%s). " % (path, hash, hash_debug)
                     self.local_eggs[name] = (name, version+tag, os.path.join(self.dist_dir,fullname))
                     continue
